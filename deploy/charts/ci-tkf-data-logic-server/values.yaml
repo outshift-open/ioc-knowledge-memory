@@ -27,7 +27,7 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt
 
 serviceName: ci-tkf-data-logic-server
-namespace: ci-tkf-data-logic-server
+namespace: ci-tkf
 dockerPreamable: 626007623524.dkr.ecr.us-east-2.amazonaws.com
 servicePort: "5000"
 metricsPort: "5001"
