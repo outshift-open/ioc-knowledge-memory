@@ -14,8 +14,8 @@ USER app
 COPY --chown=app:app pyproject.toml .
 
 RUN pip3 install --user poetry --break-system-packages
-RUN poetry config virtualenvs.create false
-RUN poetry install --only=main --no-dev
+RUN /home/app/.local/bin/poetry config virtualenvs.create false
+RUN /home/app/.local/bin/poetry install --only=main --no-dev
 
 COPY --chown=app:app src/server/ .
 
