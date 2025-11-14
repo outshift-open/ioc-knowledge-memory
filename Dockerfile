@@ -11,14 +11,13 @@ WORKDIR /home/app
 # run the application as user app
 USER app
 
-# copy the dependencies file to the working directory
-COPY --chown=app:app app/requirements.txt .
+COPY --chown=app:app pyproject.toml .
 
-# install dependencies
-RUN pip3 install --user -r requirements.txt --break-system-packages
+RUN pip3 install --user poetry --break-system-packages
+RUN poetry config virtualenvs.create false
+RUN poetry install --only=main --no-dev
 
-# copy the content of the local src directory to the working directory
-COPY --chown=app:app app/src/ .
+COPY --chown=app:app src/server/ .
 
 
 # command to run on container start
