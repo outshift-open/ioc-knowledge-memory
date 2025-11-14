@@ -22,4 +22,4 @@ COPY --chown=app:app app/src/ .
 
 
 # command to run on container start
-CMD [ "python3", "server.py" ]
+CMD [ "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000" ]
