@@ -10,7 +10,7 @@ class ApiKeyResponse(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "key": "tkf_1234567890abcdef1234567890abcdef"
+                "key": "tkf_1234567890abcdef1234567890abcdef"  # legit:ignore-secrets
             }
         }
 
