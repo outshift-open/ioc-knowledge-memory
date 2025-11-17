@@ -74,6 +74,19 @@ class InMemoryStorage:
         with self._lock:
             return [user for user in self._users.values() if user.workspace_id == workspace_id]
     
+    def delete_user(self, user_id: str) -> bool:
+        with self._lock:
+            if user_id in self._users:
+                user = self._users[user_id]
+                if user.workspace_id in self._workspaces:
+                    workspace = self._workspaces[user.workspace_id]
+                    if user_id in workspace.users:
+                        workspace.users.remove(user_id)
+                
+                del self._users[user_id]
+                return True
+            return False
+    
     def create_api_key(self, api_key: ApiKey) -> None:
         with self._lock:
             self._api_keys[api_key.id] = api_key
