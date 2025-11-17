@@ -2,15 +2,15 @@ from fastapi import APIRouter, HTTPException, status
 from datetime import datetime, timezone
 import uuid
 
-from schemas.workspace import (
+from server.schemas.workspace import (
     WorkspaceCreate, 
     WorkspaceResponse, 
     WorkspaceDetail, 
     WorkspaceUpdate,
     WorkspaceList
 )
-from models.workspace import Workspace
-from storage.memory import storage
+from server.models.workspace import Workspace
+from server.storage.memory import storage
 
 router = APIRouter()
 

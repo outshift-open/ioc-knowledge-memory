@@ -1,14 +1,14 @@
-import datetime
 import json
 import logging
 import os
+from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 
-from common import service_name
-from health_check import check_self, HealthState
+from server.common import service_name
+from server.health_check import check_self, HealthState
 
 
 # Create FastAPI app
@@ -103,7 +103,7 @@ def healthz():
 
 
 # Register API routes
-from api.api import api_router
+from server.api.api import api_router
 app.include_router(api_router, prefix="/api")
 
 

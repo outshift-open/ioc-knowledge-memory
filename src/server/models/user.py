@@ -9,4 +9,3 @@ class User:
     email: str
     workspace_id: str
     created_at: datetime
-    created_at: datetime

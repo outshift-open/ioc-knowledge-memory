@@ -1,8 +1,8 @@
 from enum import Enum
 import time
 
-from common import service_name
-from mock_services import verify_db, verify_foo
+from server.common import service_name
+from server.mock_services import verify_db, verify_foo
 
 class HealthState(Enum):
     UP = 0

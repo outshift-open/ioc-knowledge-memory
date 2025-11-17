@@ -2,9 +2,9 @@ from fastapi import APIRouter, HTTPException, status
 from datetime import datetime, timezone
 import uuid
 
-from schemas.user import UserCreate, UserResponse, UserDetail
-from models.user import User
-from storage.memory import storage
+from server.schemas.user import UserCreate, UserResponse, UserDetail
+from server.models.user import User
+from server.storage.memory import storage
 
 router = APIRouter()
 
