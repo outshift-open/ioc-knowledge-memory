@@ -2,23 +2,22 @@
 name = "ci-tkf-data-logic-svc"
 version = "0.1.0"
 description = "TKF Data Logic Service"
-authors = [{name = "Cisco ETI Team"}]
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.104.0",
-    "uvicorn[standard]>=0.24.0",
-    "prometheus-fastapi-instrumentator>=6.1.0",
-    "email-validator>=2.1.0",
-    "requests",
+    "fastapi==0.104.1",
+    "uvicorn[standard]==0.24.0", 
+    "prometheus-fastapi-instrumentator==6.1.0",
+    "email-validator==2.1.1",
+    "requests==2.31.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
-    "black", 
-    "flake8",
-    "httpx>=0.28.1",
+    "pytest==7.4.3",
+    "black==23.11.0", 
+    "flake8==6.1.0",
+    "httpx==0.28.1",
 ]
 
 [build-system]
