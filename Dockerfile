@@ -16,9 +16,10 @@ COPY --chown=app:app pyproject.toml uv.lock ./
 RUN pip3 install --user uv --break-system-packages
 RUN /home/app/.local/bin/uv sync --no-dev --no-install-project
 
-COPY --chown=app:app src/server/ .
+COPY --chown=app:app src/ ./src/
 
 ENV PATH="/home/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/home/app/src"
 
 # command to run on container start
-CMD [ "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000" ]
+CMD [ "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000" ]
