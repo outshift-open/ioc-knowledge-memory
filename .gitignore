@@ -1,3 +1,6 @@
+# Local binaries
+bin/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -127,6 +130,17 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# uv
+.uv_cache/
+uv.lock.bak
+
+# Docker
+.dockerignore.bak
+
+# IDE
+.vscode/
+.idea/
 
 # Mac files
 .DS_Store

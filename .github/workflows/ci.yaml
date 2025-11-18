@@ -4,7 +4,7 @@ on:
   # we want pull requests so we can build(test) but not push to image registry
   push:
     branches:
-      - 'main'
+      - "main"
 
     # only build when important files change
     #paths:
@@ -14,13 +14,13 @@ on:
     #  - "[0-9]+.[0-9]+.[0-9]+"
   pull_request:
     branches:
-      - 'main'
+      - "main"
   workflow_dispatch:
 
 # Grant read access for GITHUB_TOKEN on all jobs
 permissions:
   id-token: write # This is required for requesting the JWT
-  contents: read  # This is required for actions/checkout
+  contents: read # This is required for actions/checkout
   packages: write # needed to push docker image to gar or ecr
 
 jobs:
@@ -31,7 +31,7 @@ jobs:
     runs-on:
       group: ${{ vars.DEFAULT_ARC_RUNNERS }}
     container:
-      image:  ${{ vars.DEFAULT_CONTAINER_RUNNER }}
+      image: ${{ vars.DEFAULT_CONTAINER_RUNNER }}
       options: --user root
       credentials:
         username: ${{ secrets.GHCR_USERNAME }}
@@ -44,20 +44,20 @@ jobs:
           # The branch, tag or SHA to checkout, otherwise, uses the default branch.
           ref: ${{ github.ref }}
           # Relative path under $GITHUB_WORKSPACE to place the repository
-          path: ''
+          path: ""
           # Whether to execute `git clean -ffdx && git reset --hard HEAD` before fetching
           # Default: true
           clean: true
           # Whether to download Git-LFS files
           # Default: false
-          lfs: ''
+          lfs: ""
           # Whether to checkout submodules: `true` to checkout submodules or `recursive` to
           # recursively checkout submodules.
           # Default: false
-          submodules: ''
+          submodules: ""
 
-  ################################## Unit Test ##################################
-  ###############################################################################
+      ################################## Unit Test ##################################
+      ###############################################################################
 
       - name: Unit Tests
         run: |
@@ -69,7 +69,7 @@ jobs:
   ###############################################################################
   call-docker-build-push:
     name: Call Docker Build Panoptica Scan & Push
-    needs: [ checkout-unit-tests ]
+    needs: [checkout-unit-tests]
     uses: cisco-eti/gh-reusable-workflows/.github/workflows/build-push-docker.yaml@production
 
     secrets:
@@ -157,7 +157,7 @@ jobs:
   #################################################################################
   call-helm-publish:
     name: Helm publish
-    needs: [ call-docker-build-push ]
+    needs: [call-docker-build-push]
     uses: cisco-eti/gh-reusable-workflows/.github/workflows/helm-publish.yaml@production
     with:
       runner-group: ${{ vars.DEFAULT_ARC_RUNNERS }}
@@ -177,7 +177,9 @@ jobs:
   #################################################################################
   call-trigger-cd:
     name: Trigger CD
-    needs: [ call-helm-publish ]
+    needs: [call-helm-publish]
+    # Temporarily disabled - deployment repo doesn't exist yet
+    if: github.ref == 'refs/heads/main'
     uses: cisco-eti/gh-reusable-workflows/.github/workflows/trigger-deploy.yaml@production
     with:
       deployment-repo: "${{ github.repository }}-deployment"
@@ -200,7 +202,13 @@ jobs:
   reusable-workflow-ci-status:
     name: Reusable Workflow CI Status
     # This should be an array of ALL active jobs that are used/run
-    needs: [ checkout-unit-tests,call-docker-build-push, call-helm-publish, call-trigger-cd ]
+    needs:
+      [
+        checkout-unit-tests,
+        call-docker-build-push,
+        call-helm-publish,
+        call-trigger-cd,
+      ]
     if: always()
     runs-on:
       group: ${{ vars.DEFAULT_ARC_RUNNERS }}

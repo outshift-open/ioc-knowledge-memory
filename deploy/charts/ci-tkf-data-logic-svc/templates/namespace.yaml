@@ -5,7 +5,7 @@ metadata:
 {{- if  .Values.namespace }}
   name: {{ .Values.namespace }}
 {{- else }}
-  name: ci-tkf-data-logic-server
+  name: ci-tkf-data-logic-svc
 {{- end }}
   labels:
 {{- if  .Values.imageSignatureVerification }}

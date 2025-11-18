@@ -26,7 +26,7 @@ ingress:
     nginx.ingress.kubernetes.io/rewrite-target: /
     cert-manager.io/cluster-issuer: letsencrypt
 
-serviceName: ci-tkf-data-logic-server
+serviceName: ci-tkf-data-logic-svc
 namespace: ci-tkf
 dockerPreamable: 626007623524.dkr.ecr.us-east-2.amazonaws.com
 servicePort: "5000"
@@ -76,7 +76,7 @@ configmap:
   CONFIGMAP_TEST: "test_static_value"
   CONFIGMAP_DEFAULT_EXAMPLE: "default_value_foo"
   CONFIGMAP_OVERLAY_EXAMPLE: "default_value_bar"
-  SERVICE_NAME: "ci-tkf-data-logic-server"
+  SERVICE_NAME: "ci-tkf-data-logic-svc"
   LOG_LEVEL: "INFO"
   # desired simulated uptime for mocked upstream dependencies to demonstrate service health endpoint
   MOCK_DB_UPTIME: "99.9"
@@ -93,10 +93,10 @@ grafana:
       label: "grafana_dashboard"
 
 # Environment-specific values
-tagversion: SET_IN_DEPLOYMENT_REPO      # Defer to deployment repo to capture appropriate version for target environment
-dimage: SET_IN_DEPLOYMENT_REPO          # Defer to deployment repo to capture appropriate image name for dev/staging/prod
-domainName: SET_IN_DEPLOYMENT_REPO      # Defer to deployment repo to capture appropriate domain name for dev/staging/prod
-replicas: 2                             # Default replica count; override in deployment repo for env-specific replica count
+tagversion: SET_IN_DEPLOYMENT_REPO # Defer to deployment repo to capture appropriate version for target environment
+dimage: SET_IN_DEPLOYMENT_REPO # Defer to deployment repo to capture appropriate image name for dev/staging/prod
+domainName: SET_IN_DEPLOYMENT_REPO # Defer to deployment repo to capture appropriate domain name for dev/staging/prod
+replicas: 2 # Default replica count; override in deployment repo for env-specific replica count
 
 #### PDB ####
 podDisruptionBudget:

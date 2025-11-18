@@ -1,4 +1,4 @@
-FROM ghcr.io/cisco-eti/sre-python-docker:v3.11.9-hardened-debian-12
+FROM python:3.13.0-slim
 
 # Add user app
 RUN useradd -u 1001 app
@@ -11,15 +11,16 @@ WORKDIR /home/app
 # run the application as user app
 USER app
 
-# copy the dependencies file to the working directory
-COPY --chown=app:app app/requirements.txt .
+COPY --chown=app:app pyproject.toml poetry.lock ./
 
-# install dependencies
-RUN pip3 install --user -r requirements.txt --break-system-packages
+RUN pip3 install --user poetry --break-system-packages
+RUN /home/app/.local/bin/poetry config virtualenvs.create false
+RUN /home/app/.local/bin/poetry install --only=main --no-root
 
-# copy the content of the local src directory to the working directory
-COPY --chown=app:app app/src/ .
+COPY --chown=app:app src/ ./src/
 
+ENV PYTHONPATH="/home/app/src"
+ENV PATH="/home/app/.local/bin:$PATH"
 
 # command to run on container start
-CMD [ "python3", "server.py" ]
+CMD [ "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000" ]
