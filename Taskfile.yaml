@@ -1,0 +1,103 @@
+version: "3"
+
+vars:
+  TASK_VERSION: v3.39.2
+  TASK_INSTALL_DIR: ./bin
+  SRC_DIR: ./src
+  PYTHON: python3
+
+tasks:
+  deps:
+    desc: Install task binary locally in this repository
+    cmds:
+      - task: install
+    silent: false
+
+  install:
+    desc: Install Python dependencies using Poetry
+    cmds:
+      - poetry install
+
+  poetry-update:
+    desc: Update Poetry dependencies
+    cmds:
+      - poetry update
+
+  poetry-lock:
+    desc: Generate or update poetry.lock file
+    cmds:
+      - poetry lock
+
+  dev:
+    desc: Start development server with hot reload
+    cmds:
+      - poetry run uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload
+    dir: "{{.SRC_DIR}}"
+
+  run:
+    desc: Start production server using main.py
+    cmds:
+      - poetry run python main.py
+    dir: "{{.SRC_DIR}}/server"
+
+  test:
+    desc: Run unit tests
+    cmds:
+      - poetry run pytest server/test.py -v
+    dir: "{{.SRC_DIR}}"
+
+  test-all:
+    desc: Run all tests
+    cmds:
+      - poetry run pytest -v
+    dir: "{{.SRC_DIR}}"
+
+  lint:
+    desc: Run linting and formatting
+    cmds:
+      - poetry run black server/
+      - poetry run flake8 server/
+    dir: "{{.SRC_DIR}}"
+
+  lint-check:
+    desc: Check linting without making changes
+    cmds:
+      - poetry run black --check server/
+      - poetry run flake8 server/
+    dir: "{{.SRC_DIR}}"
+
+  clean:
+    desc: Clean Python cache files
+    cmds:
+      - find . -type d -name "__pycache__" -delete
+      - find . -name "*.pyc" -delete
+
+  docker-build:
+    desc: Build Docker image
+    cmds:
+      - |
+        docker build \
+          --build-arg GIT_COMMIT_SHA=$(git rev-parse HEAD) \
+          --build-arg GIT_COMMIT_TIME=$(git log -1 --format=%cI) \
+          --build-arg GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD) \
+          -t ci-tkf-data-logic-svc:latest .
+
+  docker-run:
+    desc: Run Docker container
+    cmds:
+      - docker run -p 8000:8000 ci-tkf-data-logic-svc:latest
+
+  docker-compose-up:
+    desc: Start services with docker-compose
+    cmds:
+      - docker-compose up
+
+  docker-compose-down:
+    desc: Stop services with docker-compose
+    cmds:
+      - docker-compose down
+
+  help:
+    desc: Show available tasks
+    cmds:
+      - task --list
