@@ -179,7 +179,7 @@ jobs:
     name: Trigger CD
     needs: [call-helm-publish]
     # Temporarily disabled - deployment repo doesn't exist yet
-    if: false
+    if: github.ref == 'refs/heads/main'
     uses: cisco-eti/gh-reusable-workflows/.github/workflows/trigger-deploy.yaml@production
     with:
       deployment-repo: "${{ github.repository }}-deployment"
