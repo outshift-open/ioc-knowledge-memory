@@ -4,7 +4,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - SERVICE_NAME=ci-tkf-data-logic-server
+      - SERVICE_NAME=ci-tkf-data-logic-svc
       - APPLICATION_VERSION=dev
       - LOG_LEVEL=INFO
     volumes:

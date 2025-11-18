@@ -14,7 +14,6 @@ from server.health_check import check_self, HealthState
 # Create FastAPI app
 app = FastAPI(
     title=f"{service_name} API",
-    description="Platform Demo ci-tkf-data-logic-server with Workspace, User, and API Key Management",
     version=os.environ.get("APPLICATION_VERSION", "NOT_FOUND")
 )
 
@@ -41,7 +40,7 @@ def hello():
     return f"""
     <html>
         <body>
-        <p>Platform Demo ci-tkf-data-logic-server Hello World</p>
+        <p>Platform Demo ci-tkf-data-logic-svc Hello World</p>
         <ul>
             <li><a href='/env'>Env Vars</a></li>
             <li><a href='/metrics'>Metrics</a></li>
@@ -59,7 +58,7 @@ def env_var():
     return f"""
     <html>
         <body>
-        <p>Platform Demo ci-tkf-data-logic-server Hello World Environment Vars</p>
+        <p>Platform Demo ci-tkf-data-logic-svc Hello World Environment Vars</p>
         <ul>
             <li>CONFIGMAP_TEST: {os.environ.get("CONFIGMAP_TEST")}</li>
             <li>CONFIGMAP_DEFAULT_EXAMPLE: {os.environ.get("CONFIGMAP_DEFAULT_EXAMPLE")}</li>

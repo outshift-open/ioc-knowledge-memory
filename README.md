@@ -36,7 +36,7 @@ poetry run python main.py
 **Option 3: Using Docker**
 
 ```bash
-docker-compose up -build
+docker-compose up --build
 ```
 
 ## API Endpoints
