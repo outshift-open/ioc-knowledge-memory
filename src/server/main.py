@@ -87,7 +87,7 @@ def foo():
 def healthz():
     service_state = check_self()
     
-    timestamp = datetime.datetime.now().isoformat()
+    timestamp = datetime.now().isoformat()
     response_body = {
         "service_name": service_name,
         "service_state": service_state.name,

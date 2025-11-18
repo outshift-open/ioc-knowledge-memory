@@ -6,9 +6,30 @@ TKF Data Logic Service - FastAPI workspace, user, and API key management
 
 - Python 3.8+
 - Poetry: `curl -sSL https://install.python-poetry.org | python3 -`
-- Task: `brew install go-task` (macOS) or [install guide](https://taskfile.dev/installation/)
+- Task:
+  - **macOS**: `brew install go-task`
+  - **Linux**: `apt install task`, `dnf install go-task`, or `snap install task --classic`
+  - **Cross-platform**: `npm install -g @go-task/cli`
+  - **Go users**: `go install github.com/go-task/task/v3/cmd/task@latest`
+  - **Manual install**: `sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b ~/.local/bin`
+  - **All-in-one setup**: `./install.sh` (installs Poetry and Task globally, and dependencies)
 
 ## Quick Start
+
+**Option 1: Docker**
+
+```bash
+docker-compose up --build
+```
+
+**Option 2:**
+
+```bash
+./install.sh
+task dev
+```
+
+**Option 3: Manual setup (if you have Poetry/Task already)**
 
 ```bash
 poetry install
@@ -19,21 +40,23 @@ task dev
 
 ## Development
 
-**Option 1: Using Task**
+**Using Task**
 
 ```bash
 task dev              # Start development server
-task test             # Run tests
+task test             # Run all tests
+task docker-build     # Build Docker image
+task docker-run       # Run Docker container
 ```
 
-**Option 2: Using Poetry directly**
+**Using Poetry directly**
 
 ```bash
 cd src/server
 poetry run python main.py
 ```
 
-**Option 3: Using Docker**
+**Using Docker**
 
 ```bash
 docker-compose up --build
