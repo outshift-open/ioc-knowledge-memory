@@ -11,15 +11,16 @@ WORKDIR /home/app
 # run the application as user app
 USER app
 
-COPY --chown=app:app pyproject.toml uv.lock ./
+COPY --chown=app:app pyproject.toml poetry.lock ./
 
-RUN pip3 install --user uv --break-system-packages
-RUN /home/app/.local/bin/uv sync --no-dev --no-install-project
+RUN pip3 install --user poetry --break-system-packages
+RUN /home/app/.local/bin/poetry config virtualenvs.create false
+RUN /home/app/.local/bin/poetry install --only=main --no-root
 
 COPY --chown=app:app src/ ./src/
 
-ENV PATH="/home/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/home/app/src"
+ENV PATH="/home/app/.local/bin:$PATH"
 
 # command to run on container start
 CMD [ "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000" ]
