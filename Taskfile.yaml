@@ -41,16 +41,29 @@ tasks:
     dir: "{{.SRC_DIR}}/server"
 
   test:
-    desc: Run unit tests
+    desc: Run all tests with pytest
     cmds:
-      - poetry run pytest server/test.py -v
-    dir: "{{.SRC_DIR}}"
+      - poetry run pytest tests/ -v
 
-  test-all:
-    desc: Run all tests
+  test-coverage:
+    desc: Run tests with coverage report
     cmds:
-      - poetry run pytest -v
-    dir: "{{.SRC_DIR}}"
+      - poetry run pytest tests/ --cov=server --cov-report=term-missing
+
+  test-workspaces:
+    desc: Run only workspace tests
+    cmds:
+      - poetry run pytest tests/test_workspaces.py -v
+
+  test-users:
+    desc: Run only user tests
+    cmds:
+      - poetry run pytest tests/test_users.py -v
+
+  test-api-keys:
+    desc: Run only API key tests
+    cmds:
+      - poetry run pytest tests/test_api_keys.py -v
 
   lint:
     desc: Run linting and formatting
