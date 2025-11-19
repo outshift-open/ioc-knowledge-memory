@@ -57,7 +57,7 @@ class SoftwareResponse(BaseModel):
           "max_retries": 3
         },
         "workspace_id": "550e8400-e29b-41d4-a716-446655440000",
-        "api_key_id": "550e8400-e29b-41d4-a716-446655440000",
+        "api_key_id": "550e8400-e29b-41d4-a716-446655440000", # legit:ignore
         "created_at": "2024-11-14T10:30:00Z"
       }
     }
