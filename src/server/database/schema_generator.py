@@ -2,6 +2,10 @@
 """
 Schema generator for Atlas migration.
 This script generates a PostgreSQL schema from SQLAlchemy models.
+Optional: Invoke this from the atlas.hcl file to have more finegrained control over the schema generation.
+          For standard use cases, using the atlas-provider-sqlalchemy is recommended per https://atlasgo.io/guides/orms/sqlalchemy/getting-started
+Usage:
+    python database/schema_generator.py
 """
 
 import sys

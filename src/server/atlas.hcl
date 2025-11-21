@@ -1,6 +1,14 @@
 // Atlas configuration for SQLAlchemy models
+//data "external_schema" "sqlalchemy" {
+//  program = ["python", "database/schema_generator.py"]
+//}
+
 data "external_schema" "sqlalchemy" {
-  program = ["python", "database/schema_generator.py"]
+    program = [
+        "atlas-provider-sqlalchemy",
+        "--path", "./database/models",
+        "--dialect", "postgresql"
+    ]
 }
 
 env "local" {

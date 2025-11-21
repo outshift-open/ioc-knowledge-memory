@@ -20,7 +20,7 @@ class Software(Base):
     )
     
     # Required fields
-    sw_type: Mapped[str] = mapped_column(String(60), nullable=False)
+    type: Mapped[str] = mapped_column(String(60), nullable=False)
     name: Mapped[str] = mapped_column(String(60), nullable=False)
     workspace_id: Mapped[str] = mapped_column(String(36), nullable=False)
     api_key_id: Mapped[str] = mapped_column(String(36), nullable=False)
