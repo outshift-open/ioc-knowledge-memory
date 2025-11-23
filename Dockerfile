@@ -1,4 +1,4 @@
-FROM python:3.13.0-slim
+FROM ghcr.io/cisco-eti/sre-python-docker:v3.11.9-hardened-debian-12
 
 # Add user app
 RUN useradd -u 1001 app

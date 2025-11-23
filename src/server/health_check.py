@@ -1,14 +1,14 @@
 from enum import Enum
-import time
 
-from server.common import service_name
 from server.mock_services import verify_db, verify_foo
+
 
 class HealthState(Enum):
     UP = 0
     UNKNOWN = 1
     DEGRADED = 2
     DOWN = 3
+
 
 class HealthCheckType(Enum):
     SELF = 0
@@ -30,7 +30,9 @@ def check_foo():
 
 
 def check_self():
-    """Define service-specific logic for calculating this service's health state."""
+    """Define service-specific logic for calculating this service's
+    health state.
+    """
     # check db (mocked)
     db_ok = check_db()
     # check foo (mocked)
