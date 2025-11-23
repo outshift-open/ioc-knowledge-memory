@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from server.api.endpoints.workspaces import router as workspaces_router
-from server.api.endpoints.users import router as users_router  
+from server.api.endpoints.users import router as users_router
 from server.api.endpoints.api_keys import router as api_keys_router
 from server.api.endpoints.softwares import router as softwares_router
 

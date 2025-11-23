@@ -9,14 +9,15 @@ def _probability(probability):
     """
     SIMULATE_WITH_PROBABILITY = os.environ.get("SIMULATE_WITH_PROBABILITY", False)
     if SIMULATE_WITH_PROBABILITY:
-      if (probability < 0) or (probability > 100):
-          raise ValueError("Invalid probability value. Must be an int between 0 and 100, inclusive.")
-      if random.randint(1, 100) <= probability:
-          return True
-      else:
-          return False
+        if (probability < 0) or (probability > 100):
+            raise ValueError("Invalid probability value. Must be an int between " "0 and 100, inclusive.")
+        if random.randint(1, 100) <= probability:
+            return True
+        else:
+            return False
     else:
-      return True
+        return True
+
 
 def verify_db():
     MOCK_DB_UPTIME = float(os.environ.get("MOCK_DB_UPTIME", "99.0"))

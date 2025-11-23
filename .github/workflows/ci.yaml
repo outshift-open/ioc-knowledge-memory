@@ -31,11 +31,13 @@ jobs:
     runs-on:
       group: ${{ vars.DEFAULT_ARC_RUNNERS }}
     container:
-      image: ${{ vars.DEFAULT_CONTAINER_RUNNER }}
+      # TODO: Replace with hardened sre-python image
+      image: python:3.11-slim
+      # image: ${{ vars.DEFAULT_CONTAINER_RUNNER }}
       options: --user root
-      credentials:
-        username: ${{ secrets.GHCR_USERNAME }}
-        password: ${{ secrets.GHCR_TOKEN }}
+      # credentials:
+      #   username: ${{ secrets.GHCR_USERNAME }}
+      #   password: ${{ secrets.GHCR_TOKEN }}
 
     steps:
       - name: Checkout repository
@@ -56,13 +58,43 @@ jobs:
           # Default: false
           submodules: ""
 
+      ################################## Setup Python & Poetry #######################
+      ###############################################################################
+
+      - name: Check Python version
+        run: |
+          python3 --version || python --version
+
+      - name: Install Poetry
+        run: |
+          python3 -m pip install --upgrade pip || python -m pip install --upgrade pip
+          python3 -m pip install poetry || python -m pip install poetry
+          poetry --version
+
+      ################################## Install Dependencies #######################
+      ###############################################################################
+
+      - name: Setup virtual environment
+        run: |
+          poetry config virtualenvs.create true --local
+          poetry config virtualenvs.in-project true --local
+
+      - name: Install Dependencies
+        run: |
+          poetry install
+
+      ################################## Linting ####################################
+      ###############################################################################
+
+      - name: Run Linting
+        run: |
+          bash scripts/lint.sh
+
       ################################## Unit Test ##################################
       ###############################################################################
 
-      - name: Unit Tests
+      - name: Run Unit Tests
         run: |
-          ls -l /usr/local/bin
-          #chmod +x scripts/unit-test.sh
           bash scripts/unit-test.sh
 
   #################### Docker build & push ######################
@@ -178,7 +210,7 @@ jobs:
   call-trigger-cd:
     name: Trigger CD
     needs: [call-helm-publish]
-    # Temporarily disabled - deployment repo doesn't exist yet
+    # Run only on main branch
     if: github.ref == 'refs/heads/main'
     uses: cisco-eti/gh-reusable-workflows/.github/workflows/trigger-deploy.yaml@production
     with:

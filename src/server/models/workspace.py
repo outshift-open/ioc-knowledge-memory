@@ -8,9 +8,9 @@ class Workspace:
     id: str
     name: str
     created_at: datetime
-    users: List[str] = None  
-    api_keys: List[str] = None 
-    
+    users: List[str] = None
+    api_keys: List[str] = None
+
     def __post_init__(self):
         if self.users is None:
             self.users = []
