@@ -114,44 +114,44 @@ class InMemoryStorage:
                 return True
             return False
 
-    def create_software(self, software: Software) -> Software:
-        with self._lock:
-            self._softwares[software.id] = software
-            return software
-
-    def get_software(self, software_id: str) -> Optional[Software]:
-        with self._lock:
-            return self._softwares.get(software_id)
-
-    def get_software_by_workspace(self, workspace_id: str, software_id: str) -> Optional[Software]:
-        """Get software by workspace_id and software_id"""
-        with self._lock:
-            software = self._softwares.get(software_id)
-            if software and software.workspace_id == workspace_id:
-                return software
-            return None
-
-    def list_softwares(self) -> Dict[str, Software]:
-        with self._lock:
-            return self._softwares.copy()
-
-    def software_exists(self, software_id: str) -> bool:
-        with self._lock:
-            return software_id in self._softwares
-
-    def update_software(self, software_id: str, software: Software) -> bool:
-        with self._lock:
-            if software_id in self._softwares:
-                self._softwares[software_id] = software
-                return True
-            return False
-
-    def delete_software(self, software_id: str) -> bool:
-        with self._lock:
-            if software_id in self._softwares:
-                del self._softwares[software_id]
-                return True
-            return False
+    # def create_software(self, software: Software) -> Software:
+    #     with self._lock:
+    #         self._softwares[software.id] = software
+    #         return software
+    #
+    # def get_software(self, software_id: str) -> Optional[Software]:
+    #     with self._lock:
+    #         return self._softwares.get(software_id)
+    #
+    # def get_software_by_workspace(self, workspace_id: str, software_id: str) -> Optional[Software]:
+    #     """Get software by workspace_id and software_id"""
+    #     with self._lock:
+    #         software = self._softwares.get(software_id)
+    #         if software and software.workspace_id == workspace_id:
+    #             return software
+    #         return None
+    #
+    # def list_softwares(self) -> Dict[str, Software]:
+    #     with self._lock:
+    #         return self._softwares.copy()
+    #
+    # def software_exists(self, software_id: str) -> bool:
+    #     with self._lock:
+    #         return software_id in self._softwares
+    #
+    # def update_software(self, software_id: str, software: Software) -> bool:
+    #     with self._lock:
+    #         if software_id in self._softwares:
+    #             self._softwares[software_id] = software
+    #             return True
+    #         return False
+    #
+    # def delete_software(self, software_id: str) -> bool:
+    #     with self._lock:
+    #         if software_id in self._softwares:
+    #             del self._softwares[software_id]
+    #             return True
+    #         return False
 
 
 storage = InMemoryStorage()
