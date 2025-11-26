@@ -13,6 +13,7 @@ TKF Data Logic Service - FastAPI workspace, user, and API key management
   - **Go users**: `go install github.com/go-task/task/v3/cmd/task@latest`
   - **Manual install**: `sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b ~/.local/bin`
   - **All-in-one setup**: `./install.sh` (installs Poetry and Task globally, and dependencies)
+- PostgresSQL
 
 ## Quick Start
 

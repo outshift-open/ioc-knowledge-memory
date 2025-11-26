@@ -10,7 +10,7 @@
 -- Insert info-extraction software with random JSON config
 INSERT INTO software (type, config, created_at, updated_at) 
 VALUES (
-    'info-extraction',
+    'KnowledgeAdapterTemplates',
     '{
         "extraction": {
             "entities": ["PERSON", "ORG", "GPE", "DATE"],
@@ -29,7 +29,7 @@ VALUES (
 
 INSERT INTO software (type, config, created_at, updated_at)
 VALUES (
-    'otel',
+    'KnowledgeAdapterTemplates',
     '{
   "resourceSpans": [
     {
