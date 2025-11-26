@@ -4,4 +4,3 @@ from enum import Enum
 
 # This will be a list of dictionaries (JSON objects)
 SoftwareList = RootModel[List[Dict[str, Any]]]
-

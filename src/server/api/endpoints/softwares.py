@@ -8,6 +8,7 @@ from server.database.postgres.db import RelationalDB
 
 router = APIRouter()
 
+
 @router.get("/", response_model=SoftwareList)
 def list_softwares(type: Optional[str] = None):
   """
@@ -25,18 +26,18 @@ def list_softwares(type: Optional[str] = None):
 
     # Get database session
     session = db.get_session()
-    
+
     try:
       # Build query
       query = session.query(Software).filter(Software.deleted_at.is_(None))
-      
+
       # Apply type filter if provided
       if type:
         query = query.filter(Software.type == type)
-      
+
       # Execute query
       software_records = query.all()
-      
+
       # Convert to list of dictionaries
       result = []
       for software in software_records:
@@ -48,12 +49,12 @@ def list_softwares(type: Optional[str] = None):
           "updated_at": software.updated_at.isoformat() if software.updated_at else None,
         }
         result.append(software_dict)
-      
+
       return result
-      
+
     finally:
       session.close()
-      
+
   except Exception as e:
     raise HTTPException(
       status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
