@@ -1,12 +1,6 @@
 -- Script to populate the software table with sample data
 -- Run this script against your PostgreSQL database
 
--- TRUNCATE TABLE software;
-
--- Populate entries into the software table
--- poetry run psql postgresql://postgresUser:postgresPW@localhost:5455/tkf_relational_db -f scripts/populate_software.sql
-
-
 -- Insert info-extraction software with random JSON config
 INSERT INTO software (type, config, created_at, updated_at) 
 VALUES (
