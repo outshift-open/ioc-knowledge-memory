@@ -10,52 +10,49 @@ router = APIRouter()
 
 @router.get("/", response_model=SoftwareList)
 def list_softwares(type: Optional[str] = None):
-  """
-  List all softwares, optionally filtered by type
+    """
+    List all softwares, optionally filtered by type
 
-  Args:
-      type: Optional software type to filter by
+    Args:
+        type: Optional software type to filter by
 
-  Returns:
-      List of software items, filtered by type if specified
-  """
-  try:
-    # Get database instance
-    db = RelationalDB()
-
-    # Get database session
-    session = db.get_session()
-
+    Returns:
+        List of software items, filtered by type if specified
+    """
     try:
-      # Build query
-      query = session.query(Software).filter(Software.deleted_at.is_(None))
+        # Get database instance
+        db = RelationalDB()
 
-      # Apply type filter if provided
-      if type:
-        query = query.filter(Software.type == type)
+        # Get database session
+        session = db.get_session()
 
-      # Execute query
-      software_records = query.all()
+        try:
+            # Build query
+            query = session.query(Software).filter(Software.deleted_at.is_(None))
 
-      # Convert to list of dictionaries
-      result = []
-      for software in software_records:
-        software_dict = {
-          "id": software.id,
-          "type": software.type,
-          "config": software.config,
-          "created_at": software.created_at.isoformat() if software.created_at else None,
-          "updated_at": software.updated_at.isoformat() if software.updated_at else None,
-        }
-        result.append(software_dict)
+            # Apply type filter if provided
+            if type:
+                query = query.filter(Software.type == type)
 
-      return result
+            # Execute query
+            software_records = query.all()
 
-    finally:
-      session.close()
+            # Convert to list of dictionaries
+            result = []
+            for software in software_records:
+                software_dict = {
+                    "id": software.id,
+                    "type": software.type,
+                    "config": software.config,
+                    "created_at": software.created_at.isoformat() if software.created_at else None,
+                    "updated_at": software.updated_at.isoformat() if software.updated_at else None,
+                }
+                result.append(software_dict)
 
-  except Exception as e:
-    raise HTTPException(
-      status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-      detail=f"Database error: {str(e)}"
-    )
+            return result
+
+        finally:
+            session.close()
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {str(e)}")

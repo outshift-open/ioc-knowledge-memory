@@ -18,7 +18,7 @@ def client():
 def clean_storage():
     """Clean the in-memory storage before each test."""
     storage._workspaces.clear()
-    storage._users.clear() 
+    storage._users.clear()
     storage._api_keys.clear()
     yield
     storage._workspaces.clear()
@@ -35,13 +35,7 @@ def sample_workspace_data():
 @pytest.fixture
 def sample_user_data():
     """Sample user data for testing."""
-    return {
-        "name": "John Doe",
-        "email": "john.doe@example.com"
-    }
-
-
-
+    return {"name": "John Doe", "email": "john.doe@example.com"}
 
 
 @pytest.fixture

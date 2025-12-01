@@ -14,7 +14,6 @@ class InMemoryStorage:
         self._users: Dict[str, User] = {}
         self._api_keys: Dict[str, ApiKey] = {}
 
-
     def create_workspace(self, workspace: Workspace) -> None:
         with self._lock:
             self._workspaces[workspace.id] = workspace

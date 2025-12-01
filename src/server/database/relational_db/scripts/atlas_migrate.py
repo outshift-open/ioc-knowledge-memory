@@ -21,7 +21,7 @@ def run_command(cmd, description, cwd=None):
     try:
         if cwd is None:
             cwd = relational_db_root
-        
+
         result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True, cwd=cwd)
         print(f"✅ {description} completed successfully!")
         if result.stdout:
@@ -72,7 +72,8 @@ def test_schema_generation():
 def main():
     """Main CLI interface."""
     if len(sys.argv) < 2:
-        print("""
+        print(
+            """
 🗄️  Atlas Migration Manager
 
 Usage:
@@ -91,11 +92,12 @@ Examples:
     python src/server/database/relational_db/scripts/atlas_migrate.py apply
     python src/server/database/relational_db/scripts/atlas_migrate.py status
     python src/server/database/relational_db/scripts/atlas_migrate.py generate "Update software model" dev
-        """)
+        """
+        )
         return
 
     command = sys.argv[1]
-    
+
     if command == "generate":
         if len(sys.argv) < 3:
             print("❌ Please provide a migration message")
@@ -103,26 +105,26 @@ Examples:
         message = sys.argv[2]
         env = sys.argv[3] if len(sys.argv) > 3 else "local"
         generate_migration(message, env)
-        
+
     elif command == "apply":
         env = sys.argv[2] if len(sys.argv) > 2 else "local"
         apply_migrations(env)
-        
+
     elif command == "status":
         env = sys.argv[2] if len(sys.argv) > 2 else "local"
         show_migration_status(env)
-        
+
     elif command == "validate":
         env = sys.argv[2] if len(sys.argv) > 2 else "local"
         validate_migrations(env)
-        
+
     elif command == "lint":
         env = sys.argv[2] if len(sys.argv) > 2 else "local"
         lint_schema(env)
-        
+
     elif command == "test-schema":
         test_schema_generation()
-        
+
     else:
         print(f"❌ Unknown command: {command}")
 
