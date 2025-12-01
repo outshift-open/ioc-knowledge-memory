@@ -1,7 +1,4 @@
 // Atlas configuration for SQLAlchemy models
-//data "external_schema" "sqlalchemy" {
-//  program = ["python", "database/schema_generator.py"]
-//}
 
 data "external_schema" "sqlalchemy" {
     program = [
@@ -13,8 +10,9 @@ data "external_schema" "sqlalchemy" {
 
 env "local" {
   src = data.external_schema.sqlalchemy.url
-  # Local database connection (SSL disabled)
-  url = "postgresql://postgresUser:postgresPW@localhost:5455/tkf_relational_db?sslmode=disable"
+  # url = "postgresql://postgresUser:postgresPW@localhost:5455/tkf_relational_db?sslmode=disable"
+  # Database connection using environment variables with defaults
+  url = "postgresql://${getenv("POSTGRES_USER", "postgresUser")}:${getenv("POSTGRES_PASSWORD", "postgresPW")}@${getenv("POSTGRES_HOST", "localhost")}:${getenv("POSTGRES_PORT", "5455")}/${getenv("POSTGRES_DB", "tkf_relational_db")}?sslmode=disable"
   # Dev database for schema diffing
   dev = "docker://postgres/17/dev?search_path=public"
   migration {

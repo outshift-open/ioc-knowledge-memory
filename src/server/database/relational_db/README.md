@@ -7,7 +7,7 @@ https://www.tigerdata.com/docs/self-hosted/latest/install/installation-docker
 ```
 docker compose -f docker/db.yaml up -d
 ``` 
-If using non-default env variables, modify the docker file and setup env var as below in a .env file at the repo root.
+Optionally - If using non-default env variables in a .env file at the repo root.
 ```
 'POSTGRES_DB', 'tkf_relational_db'
 'POSTGRES_USER', 'postgresUser'
@@ -15,6 +15,8 @@ If using non-default env variables, modify the docker file and setup env var as 
 'POSTGRES_HOST', 'localhost'
 'POSTGRES_PORT', '5455'
 ```
+- Use the correct env variables in the docker compose file.
+
 #### Schema Migration
 
 Database migration is performed using Atlas.
@@ -38,7 +40,11 @@ python3 scripts/atlas_migrate.py generate "descriptive message for your migratio
 ```
 
 #### Data Population
-1. Populate the software table entries via script.
-```
+1. Populate the software table entries via script using environment variables:
+```bash
+# Using environment variables (recommended)
+poetry run psql "postgresql://${POSTGRES_USER:-postgresUser}:${POSTGRES_PASSWORD:-postgresPW}@${POSTGRES_HOST:-localhost}:${POSTGRES_PORT:-5455}/${POSTGRES_DB:-tkf_relational_db}" -f scripts/populate_software.sql
+
+# Or with explicit values
 poetry run psql postgresql://postgresUser:postgresPW@localhost:5455/tkf_relational_db -f scripts/populate_software.sql
 ```
