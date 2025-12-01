@@ -1,1 +1,4 @@
-postgresPW
+.env.example
+src/server/database/relational_db/README.md
+src/server/database/relational_db/atlas.hcl
+src/server/database/relational_db/scripts/populate_software.py

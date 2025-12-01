@@ -1,0 +1,14 @@
+services:
+  tkf-relational-db:
+    image: timescale/timescaledb-ha:pg17
+    environment:
+      POSTGRES_DB: tkf_relational_db
+      POSTGRES_USER: postgresUser
+      POSTGRES_PASSWORD: postgresPW
+    ports:
+      - "5455:5432"
+    volumes:
+      - timescaledb_data:/var/lib/timescaledb/data
+
+volumes:
+  timescaledb_data:

@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from server.api.api import api_router
-from server.database.postgres.db import RelationalDB
+from server.database.relational_db.db import RelationalDB
 
 from server.common import service_name
 

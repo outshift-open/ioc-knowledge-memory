@@ -18,7 +18,7 @@ class Software(Base):
     )
 
     # Required fields
-    type = Column(String(180), nullable=False)
+    type = Column(String(90), nullable=False)
     config = Column(JSON, nullable=True)
 
     # Timestamp fields - auto-generated in database

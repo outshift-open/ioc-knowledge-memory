@@ -3,7 +3,6 @@ import threading
 from server.models.workspace import Workspace
 from server.models.user import User
 from server.models.api_key import ApiKey
-from server.models.software import Software
 
 
 class InMemoryStorage:
@@ -14,7 +13,7 @@ class InMemoryStorage:
         self._workspaces: Dict[str, Workspace] = {}
         self._users: Dict[str, User] = {}
         self._api_keys: Dict[str, ApiKey] = {}
-        self._softwares: Dict[str, Software] = {}
+
 
     def create_workspace(self, workspace: Workspace) -> None:
         with self._lock:
@@ -113,45 +112,6 @@ class InMemoryStorage:
                 del self._api_keys[api_key_id]
                 return True
             return False
-
-    # def create_software(self, software: Software) -> Software:
-    #     with self._lock:
-    #         self._softwares[software.id] = software
-    #         return software
-    #
-    # def get_software(self, software_id: str) -> Optional[Software]:
-    #     with self._lock:
-    #         return self._softwares.get(software_id)
-    #
-    # def get_software_by_workspace(self, workspace_id: str, software_id: str) -> Optional[Software]:
-    #     """Get software by workspace_id and software_id"""
-    #     with self._lock:
-    #         software = self._softwares.get(software_id)
-    #         if software and software.workspace_id == workspace_id:
-    #             return software
-    #         return None
-    #
-    # def list_softwares(self) -> Dict[str, Software]:
-    #     with self._lock:
-    #         return self._softwares.copy()
-    #
-    # def software_exists(self, software_id: str) -> bool:
-    #     with self._lock:
-    #         return software_id in self._softwares
-    #
-    # def update_software(self, software_id: str, software: Software) -> bool:
-    #     with self._lock:
-    #         if software_id in self._softwares:
-    #             self._softwares[software_id] = software
-    #             return True
-    #         return False
-    #
-    # def delete_software(self, software_id: str) -> bool:
-    #     with self._lock:
-    #         if software_id in self._softwares:
-    #             del self._softwares[software_id]
-    #             return True
-    #         return False
 
 
 storage = InMemoryStorage()

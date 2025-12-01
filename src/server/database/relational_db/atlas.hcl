@@ -6,7 +6,7 @@
 data "external_schema" "sqlalchemy" {
     program = [
         "atlas-provider-sqlalchemy",
-        "--path", "./database/models",
+        "--path", "./models",
         "--dialect", "postgresql"
     ]
 }

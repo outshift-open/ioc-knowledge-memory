@@ -10,7 +10,8 @@ import subprocess
 from pathlib import Path
 
 # Add project root to Python path
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).parent.parent.parent.parent.parent
+relational_db_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 
@@ -19,7 +20,7 @@ def run_command(cmd, description, cwd=None):
     print(f"🔄 {description}...")
     try:
         if cwd is None:
-            cwd = project_root / "src" / "server"
+            cwd = relational_db_root
         
         result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True, cwd=cwd)
         print(f"✅ {description} completed successfully!")
@@ -64,7 +65,7 @@ def lint_schema(env="local"):
 
 def test_schema_generation():
     """Test if schema generation works."""
-    cmd = "python database/schema_generator.py"
+    cmd = "python ../schema_generator.py"
     return run_command(cmd, "Testing schema generation")
 
 
@@ -75,7 +76,7 @@ def main():
 🗄️  Atlas Migration Manager
 
 Usage:
-    python scripts/atlas_migrate.py <command> [args]
+    python src/server/database/relational_db/scripts/atlas_migrate.py <command> [args]
 
 Commands:
     generate <message> [env]    Generate new migration (default env: local)
@@ -86,10 +87,10 @@ Commands:
     test-schema               Test schema generation from models
     
 Examples:
-    python scripts/atlas_migrate.py generate "Add software table"
-    python scripts/atlas_migrate.py apply
-    python scripts/atlas_migrate.py status
-    python scripts/atlas_migrate.py generate "Update software model" dev
+    python src/server/database/relational_db/scripts/atlas_migrate.py generate "Add software table"
+    python src/server/database/relational_db/scripts/atlas_migrate.py apply
+    python src/server/database/relational_db/scripts/atlas_migrate.py status
+    python src/server/database/relational_db/scripts/atlas_migrate.py generate "Update software model" dev
         """)
         return
 

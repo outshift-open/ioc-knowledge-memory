@@ -1,10 +1,9 @@
 from fastapi import APIRouter, HTTPException, status
-from datetime import datetime
 from typing import Optional
 
 from server.schemas.software import SoftwareList
-from server.database.models.software import Software
-from server.database.postgres.db import RelationalDB
+from server.database.relational_db.models.software import Software
+from server.database.relational_db.db import RelationalDB
 
 router = APIRouter()
 

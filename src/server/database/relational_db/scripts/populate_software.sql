@@ -1,7 +1,4 @@
 -- Script to populate the software table with sample data
--- Run this script against your PostgreSQL database
-
--- Insert info-extraction software with random JSON config
 INSERT INTO software (type, config, created_at, updated_at) 
 VALUES (
     'KnowledgeAdapterTemplates',
