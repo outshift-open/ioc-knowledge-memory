@@ -1,17 +1,40 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from server.api.api import api_router
+from server.database.relational_db.db import RelationalDB
 
 from server.common import service_name
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan events."""
+    # Startup
+    logger = logging.getLogger(__name__)
+    logger.info("Initializing database connection...")
+
+    db = RelationalDB()
+    db.init()
+
+    logger.info("Database initialized successfully")
+
+    yield
+
+    # Shutdown
+    logger.info("Closing database connection...")
+    db.close()
+    logger.info("Database connection closed")
 
 
 # Create FastAPI app
 app = FastAPI(
     title=f"{service_name} API",
     version=os.environ.get("APPLICATION_VERSION", "NOT_FOUND"),
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -58,5 +81,5 @@ if __name__ == "__main__":
     version = os.environ.get("APPLICATION_VERSION")
     logger.info(f"Starting up the '{service_name}' FastAPI app! Version: '{version}'")
 
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 8001))
     uvicorn.run(app, host="0.0.0.0", port=port)

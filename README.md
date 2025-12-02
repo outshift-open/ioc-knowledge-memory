@@ -14,6 +14,11 @@ TKF Data Logic Service - FastAPI workspace, user, and API key management
   - **Manual install**: `sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b ~/.local/bin`
   - **All-in-one setup**: `./install.sh` (installs Poetry and Task globally, and dependencies)
 
+#### Dependencies for the Relational DB
+For details please refer to the [README](src/server/database/relational_db/README.md)
+- [TimescaleDB(Postgres17)](https://www.tigerdata.com/docs/self-hosted/latest/install/installation-docker)
+- [Atlas](https://atlasgo.io/guides/orms/sqlalchemy/getting-started)
+
 ## Quick Start
 
 **Option 1: Docker**

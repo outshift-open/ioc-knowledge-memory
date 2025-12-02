@@ -79,6 +79,17 @@ jobs:
           poetry config virtualenvs.create true --local
           poetry config virtualenvs.in-project true --local
 
+      - name: Install system dependencies (needed to build psycopg2)
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential \
+            libpq-dev \
+            gcc \
+            python3-dev \
+            pkg-config
+          rm -rf /var/lib/apt/lists/*
+
       - name: Install Dependencies
         run: |
           poetry install
