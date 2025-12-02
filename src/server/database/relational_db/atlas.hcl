@@ -8,11 +8,18 @@ data "external_schema" "sqlalchemy" {
     ]
 }
 
+locals {
+  postgres_user = getenv("POSTGRES_USER") != "" ? getenv("POSTGRES_USER") : "postgresUser"
+  postgres_password = getenv("POSTGRES_PASSWORD") != "" ? getenv("POSTGRES_PASSWORD") : "postgresPW"
+  postgres_host = getenv("POSTGRES_HOST") != "" ? getenv("POSTGRES_HOST") : "localhost"
+  postgres_port = getenv("POSTGRES_PORT") != "" ? getenv("POSTGRES_PORT") : "5455"
+  postgres_db = getenv("POSTGRES_DB") != "" ? getenv("POSTGRES_DB") : "tkf_relational_db"
+}
+
 env "local" {
   src = data.external_schema.sqlalchemy.url
-  # url = "postgresql://postgresUser:postgresPW@localhost:5455/tkf_relational_db?sslmode=disable"
   # Database connection using environment variables with defaults
-  url = "postgresql://${getenv("POSTGRES_USER", "postgresUser")}:${getenv("POSTGRES_PASSWORD", "postgresPW")}@${getenv("POSTGRES_HOST", "localhost")}:${getenv("POSTGRES_PORT", "5455")}/${getenv("POSTGRES_DB", "tkf_relational_db")}?sslmode=disable"
+  url = "postgresql://${local.postgres_user}:${local.postgres_password}@${local.postgres_host}:${local.postgres_port}/${local.postgres_db}?sslmode=disable"
   # Dev database for schema diffing
   dev = "docker://postgres/17/dev?search_path=public"
   migration {

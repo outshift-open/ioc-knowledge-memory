@@ -42,6 +42,9 @@ python3 scripts/atlas_migrate.py generate "descriptive message for your migratio
 #### Data Population
 1. Populate the software table entries via script using environment variables:
 ```bash
+# Install postgresql client tools
+brew install postgresql
+
 # Using environment variables (recommended)
 poetry run psql "postgresql://${POSTGRES_USER:-postgresUser}:${POSTGRES_PASSWORD:-postgresPW}@${POSTGRES_HOST:-localhost}:${POSTGRES_PORT:-5455}/${POSTGRES_DB:-tkf_relational_db}" -f scripts/populate_software.sql
 

@@ -102,7 +102,7 @@ Examples:
         if len(sys.argv) < 3:
             print("❌ Please provide a migration message")
             return
-        message = sys.argv[2]
+        message = sys.argv[2].replace(' ', '_')
         env = sys.argv[3] if len(sys.argv) > 3 else "local"
         generate_migration(message, env)
 
