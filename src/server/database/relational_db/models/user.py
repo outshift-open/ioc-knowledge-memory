@@ -1,17 +1,19 @@
-from sqlalchemy import Column, String, DateTime, JSON, text, Index
+from sqlalchemy import Column, String, DateTime, text, Index
 
 from server.database.relational_db.models import Base
 
 
-class Software(Base):
-    __tablename__ = "software"
+class User(Base):
+    __tablename__ = "users"
 
     # Primary key - UUID as string, auto-generated in database
     id = Column(String(36), primary_key=True, server_default=text("gen_random_uuid()::text"))
 
     # Required fields
-    type = Column(String(90), nullable=False)
-    config = Column(JSON, nullable=True)
+    username = Column(String(360), nullable=False)
+    password = Column(String(360), nullable=False)
+    domain = Column(String(360), nullable=False)
+    role = Column(String(200), nullable=False)
 
     # Timestamp fields - auto-generated in database
     created_at = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
@@ -23,10 +25,7 @@ class Software(Base):
     deleted_at = Column(DateTime, nullable=True)
 
     # Indexes
-    __table_args__ = (
-        Index("idx_software_type", "type"),
-        Index("idx_software_deleted_at", "deleted_at"),
-    )
+    __table_args__ = (Index("idx_users_deleted_at", "deleted_at"),)
 
     def __repr__(self):
-        return f"<Software(id='{self.id}', name='{self.name}', type='{self.type}')>"
+        return f"<User(id='{self.id}', username='{self.username}', domain='{self.domain}', role='{self.role}')>"

@@ -10,10 +10,10 @@ dependencies = [
     "prometheus-fastapi-instrumentator==6.1.0",
     "email-validator==2.1.1",
     "requests==2.31.0",
-    "sqlalchemy==1.4.54",
     "psycopg2-binary==2.9.11",
     "neo4j==6.0.3",
     "python-dotenv==1.0.0",
+    "atlas-provider-sqlalchemy==0.4.1",
 ]
 
 [project.optional-dependencies]
@@ -34,7 +34,6 @@ uvicorn = {extras = ["standard"], version = "0.24.0"}
 prometheus-fastapi-instrumentator = "6.1.0"
 email-validator = "2.1.1"
 requests = "2.31.0"
-sqlalchemy = "1.4.54"
 psycopg2-binary = "2.9.11"
 neo4j = "6.0.3"
 python-dotenv = "1.0.0"

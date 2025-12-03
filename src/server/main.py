@@ -1,6 +1,7 @@
 import logging
 import os
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -8,6 +9,17 @@ from server.api.api import api_router
 from server.database.relational_db.db import RelationalDB
 
 from server.common import service_name
+from server.services.user import UserService
+from app_logging.logger import setup_logging
+
+# Load environment variables from .env file in current or parent directories
+load_dotenv(override=True)
+
+# Setup logging once for the entire application
+setup_logging(service_name)
+
+logger = logging.getLogger(__name__)
+logger.info("Environment variables loaded")
 
 
 @asynccontextmanager
@@ -21,6 +33,8 @@ async def lifespan(app: FastAPI):
     db.init()
 
     logger.info("Database initialized successfully")
+
+    UserService().create_admin_user()
 
     yield
 
@@ -78,6 +92,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=getattr(logging, log_level))
 
     logger = logging.getLogger(__name__)
+
     version = os.environ.get("APPLICATION_VERSION")
     logger.info(f"Starting up the '{service_name}' FastAPI app! Version: '{version}'")
 

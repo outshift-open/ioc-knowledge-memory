@@ -110,6 +110,33 @@ tasks:
     cmds:
       - docker-compose down
 
+  # Database migration tasks
+  db-migrate-apply:
+    desc: Apply pending database migrations
+    cmds:
+      - /usr/local/bin/atlasgo migrate apply --dir "file://migrations" --env local
+    dir: "src/server/database/relational_db"
+
+  db-migrate-status:
+    desc: Show database migration status
+    cmds:
+      - /usr/local/bin/atlasgo migrate status --dir "file://migrations" --env local
+    dir: "src/server/database/relational_db"
+
+  db-migrate-new:
+    desc: Create a new migration which will be placed in migrations folder (provide name as argument)
+    # task db-migrate-new -- "msg_for_migration"
+    cmds:
+      - /usr/local/bin/atlasgo migrate diff {{.CLI_ARGS}} --dir "file://migrations" --env local
+    dir: "src/server/database/relational_db"
+
+  db-migrate-hash:
+    desc: Rehash migration files to update checksums
+    cmds:
+      - /usr/local/bin/atlasgo migrate hash --dir "file://migrations"
+    dir: "src/server/database/relational_db"
+
+
   help:
     desc: Show available tasks
     cmds:
