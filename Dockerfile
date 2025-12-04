@@ -8,16 +8,17 @@ RUN mkdir /home/app/ && chown -R app:app /home/app
 
 WORKDIR /home/app
 
-# run the application as user app
-USER app
-
 COPY --chown=app:app pyproject.toml poetry.lock ./
 
-RUN pip3 install --user poetry --break-system-packages
-RUN /home/app/.local/bin/poetry config virtualenvs.create false
-RUN /home/app/.local/bin/poetry install --only=main --no-root
+# Install poetry and dependencies as root to avoid permission issues
+RUN pip3 install poetry
+RUN poetry config virtualenvs.create false
+RUN poetry install --only=main --no-root
 
 COPY --chown=app:app src/ ./src/
+
+# run the application as user app
+USER app
 
 ENV PYTHONPATH="/home/app/src"
 ENV PATH="/home/app/.local/bin:$PATH"
