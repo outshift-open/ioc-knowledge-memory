@@ -7,9 +7,9 @@ https://www.tigerdata.com/docs/self-hosted/latest/install/installation-docker
 ```
 docker compose -f docker/db.yaml up -d
 ``` 
-Optionally - If using non-default env variables in a .env file at the repo root.
+Optionally - Set the below env variables in a .env file at the repo root (If using non-default values).
 ```
-'POSTGRES_DB', 'tkf_relational_db'
+'POSTGRES_DB', 'tkf'
 'POSTGRES_USER', 'postgresUser'
 'POSTGRES_PASSWORD', 'postgresPW'
 'POSTGRES_HOST', 'localhost'
@@ -48,8 +48,8 @@ task db-migrate-status
 brew install postgresql
 
 # Using environment variables (recommended)
-poetry run psql "postgresql://${POSTGRES_USER:-postgresUser}:${POSTGRES_PASSWORD:-postgresPW}@${POSTGRES_HOST:-localhost}:${POSTGRES_PORT:-5455}/${POSTGRES_DB:-tkf_relational_db}" -f scripts/populate_software.sql
+poetry run psql "postgresql://${POSTGRES_USER:-postgresUser}:${POSTGRES_PASSWORD:-postgresPW}@${POSTGRES_HOST:-localhost}:${POSTGRES_PORT:-5455}/${POSTGRES_DB:-tkf}" -f scripts/populate_software.sql
 
 # Or with explicit values
-poetry run psql postgresql://postgresUser:postgresPW@localhost:5455/tkf_relational_db -f scripts/populate_software.sql
+poetry run psql postgresql://postgresUser:postgresPW@localhost:5455/tkf -f scripts/populate_software.sql
 ```

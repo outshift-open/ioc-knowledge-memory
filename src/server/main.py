@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from server.api.api import api_router
 from server.database.relational_db.db import RelationalDB
+from server.database.graph_db.neo4j.src.db_async import GraphDB
 
 from server.common import service_name
 from server.services.user import UserService
@@ -25,22 +26,37 @@ logger.info("Environment variables loaded")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan events."""
-    # Startup
-    logger = logging.getLogger(__name__)
-    logger.info("Initializing database connection...")
 
-    db = RelationalDB()
-    db.init()
+    # Database Setup
+    try:
+        db = RelationalDB()
+        db.init()
+    except Exception as e:
+        logger.error(f"Relational Database initialization failed: {str(e)}")
+        raise
 
-    logger.info("Database initialized successfully")
+    try:
+        graph_db = GraphDB()
+        await graph_db.init()
+    except Exception as e:
+        logger.error(f"Graph Database initialization failed: {str(e)}")
+        raise
 
-    UserService().create_admin_user()
+    logger.info("Database connections initialized")
+
+    # Application Setup
+    try:
+        UserService().create_admin_user()
+    except Exception as e:
+        logger.error(f"Admin user creation failed: {str(e)}")
+        raise
 
     yield
 
     # Shutdown
     logger.info("Closing database connection...")
     db.close()
+    await graph_db.close()
     logger.info("Database connection closed")
 
 

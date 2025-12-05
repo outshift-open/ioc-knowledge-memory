@@ -11,6 +11,7 @@ from fastapi import HTTPException, status
 from server.schemas.user import UserCreate, UserResponse, UserDetail
 from server.database.relational_db.models.user import User
 from server.database.relational_db.db import RelationalDB
+from server.common import get_global_encryption_key, encrypt_data
 
 # Get logger instance (logging is setup in main.py)
 logger = logging.getLogger(__name__)
@@ -40,7 +41,6 @@ class UserService:
             # Get database instance
             logger.debug("Initializing database connection")
             db = RelationalDB()
-            db.init()  # Initialize database connection
             session = db.get_session()
 
             try:
@@ -59,11 +59,14 @@ class UserService:
 
                 # Create new admin user
                 user_id = str(uuid.uuid4())
+                password = os.getenv("ADMIN_USER_PASSWORD", ADMIN_USER_PASSWORD_DEFAULT)
+                key = get_global_encryption_key()
+                encrypted_password = encrypt_data(password, key)
 
                 admin_user = User(
                     id=user_id,
                     username=ADMIN_USER_USERNAME_DEFAULT,
-                    password=os.getenv("ADMIN_USER_PASSWORD", ADMIN_USER_PASSWORD_DEFAULT),
+                    password=encrypted_password,
                     domain=ADMIN_USER_DOMAIN_DEFAULT,
                     role=ADMIN_USER_ROLE_DEFAULT,
                 )
