@@ -1,15 +1,13 @@
 """UserTable service - Business logic for user operations"""
 
 import logging
-from datetime import datetime, timezone
 import uuid
 import os
-from typing import List
 
 from fastapi import HTTPException, status
 
-from server.schemas.user import UserCreate, UserResponse, UserDetail
-from server.database.relational_db.models.user import User
+from server.schemas.user import UserResponse, User, Users
+from server.database.relational_db.models.user import User as UserModel
 from server.database.relational_db.db import RelationalDB
 from server.common import get_global_encryption_key, encrypt_data
 
@@ -46,8 +44,8 @@ class UserService:
             try:
                 # Check if admin user already exists
                 existing_user = (
-                    session.query(User)
-                    .filter(User.username == ADMIN_USER_USERNAME_DEFAULT, User.deleted_at.is_(None))
+                    session.query(UserModel)
+                    .filter(UserModel.username == ADMIN_USER_USERNAME_DEFAULT, UserModel.deleted_at.is_(None))
                     .first()
                 )
 
@@ -63,7 +61,7 @@ class UserService:
                 key = get_global_encryption_key()
                 encrypted_password = encrypt_data(password, key)
 
-                admin_user = User(
+                admin_user = UserModel(
                     id=user_id,
                     username=ADMIN_USER_USERNAME_DEFAULT,
                     password=encrypted_password,
@@ -101,6 +99,48 @@ class UserService:
             logger.error(f"Unexpected error creating admin user: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error creating admin user: {str(e)}"
+            )
+
+    def list_users(self) -> Users:
+        """
+        Get all users from the database
+
+        Returns:
+            Users: List of users with total count
+        Raises:
+            HTTPException: If database error occurs
+        """
+        logger.info("Retrieving all active users")
+
+        try:
+            db = RelationalDB()
+            session = db.get_session()
+
+            try:
+                users = session.query(UserModel).filter(UserModel.deleted_at.is_(None)).all()
+
+                user_details = [
+                    User(
+                        id=user.id,
+                        username=user.username,
+                        domain=user.domain,
+                        role=user.role,
+                        created_at=user.created_at,
+                        updated_at=user.updated_at,
+                    )
+                    for user in users
+                ]
+
+                logger.info(f"Retrieved {len(user_details)} users")
+                return Users(users=user_details, total=len(user_details))
+
+            finally:
+                session.close()
+
+        except Exception as e:
+            logger.error(f"Error retrieving users: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error retrieving users: {str(e)}"
             )
 
 

@@ -13,7 +13,6 @@ import asyncio
 import logging
 import os
 import sys
-from pathlib import Path
 from dotenv import load_dotenv
 
 # Import defaults from db_async

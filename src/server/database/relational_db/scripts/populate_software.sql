@@ -3,7 +3,7 @@ INSERT INTO software (type, config, created_at, updated_at)
 VALUES (
     'KnowledgeAdapterTemplates',
     '{
-        "extraction": {
+        "info-extraction": {
             "entities": ["PERSON", "ORG", "GPE", "DATE"],
             "confidence_threshold": 0.85,
             "use_crf": true,
@@ -22,8 +22,9 @@ INSERT INTO software (type, config, created_at, updated_at)
 VALUES (
     'KnowledgeAdapterTemplates',
     '{
-  "resourceSpans": [
-    {
+  "otel": {
+    "resourceSpans": [
+      {
       "resource": {
         "attributes": [
           {
@@ -112,6 +113,7 @@ VALUES (
       ]
     }
   ]
+  }
 }'::jsonb,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 
 class WorkspaceCreate(BaseModel):
@@ -10,6 +10,8 @@ class WorkspaceCreate(BaseModel):
         min_length=1,
         max_length=100,
     )
+    users: List[str] = Field(default_factory=list, description="List of user IDs associated with the workspace")
+    config: Dict[str, Any] = Field(default_factory=dict, description="Workspace configuration settings")
 
 
 class WorkspaceResponse(BaseModel):
@@ -34,8 +36,11 @@ class WorkspaceDetail(BaseModel):
                 "id": "550e8400-e29b-41d4-a716-446655440000",
                 "name": "My Workspace",
                 "created_at": "2024-11-14T10:30:00Z",
+                "updated_at": "2024-11-14T11:15:00Z",
+                "created_by": "user-123",
+                "updated_by": "user-456",
                 "users": [],
-                "api_keys": [],
+                "config": {},
             }
         }
     )
@@ -43,8 +48,11 @@ class WorkspaceDetail(BaseModel):
     id: str
     name: str
     created_at: datetime
+    updated_at: Optional[datetime] = None
+    created_by: Optional[str] = None
+    updated_by: Optional[str] = None
     users: List[str] = []
-    api_keys: List[str] = []
+    config: Optional[Dict[str, Any]] = None
 
 
 class WorkspaceList(BaseModel):
@@ -56,8 +64,11 @@ class WorkspaceList(BaseModel):
                         "id": "550e8400-e29b-41d4-a716-446655440000",
                         "name": "My Workspace",
                         "created_at": "2024-11-14T10:30:00Z",
+                        "updated_at": "2024-11-14T11:15:00Z",
+                        "created_by": "user-123",
+                        "updated_by": "user-456",
                         "users": [],
-                        "api_keys": [],
+                        "config": {},
                     }
                 ],
                 "total": 1,

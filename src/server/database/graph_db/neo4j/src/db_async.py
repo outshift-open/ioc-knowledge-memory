@@ -2,7 +2,7 @@ import os
 import logging
 from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
-from neo4j import AsyncGraphDatabase, AsyncDriver, AsyncSession
+from neo4j import AsyncGraphDatabase, AsyncDriver
 from neo4j.exceptions import ServiceUnavailable, AuthError
 
 # Used when environment variables are not configured

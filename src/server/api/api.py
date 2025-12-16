@@ -1,14 +1,18 @@
 from fastapi import APIRouter
 
 from server.api.endpoints.workspaces import router as workspaces_router
-from server.api.endpoints.users import router as users_router
-from server.api.endpoints.api_keys import router as api_keys_router
 from server.api.endpoints.softwares import router as softwares_router
+from server.api.endpoints.mas import router as mas_router
+from server.api.endpoints.reasoners import router as reasoners_router
+from server.api.endpoints.knowledge_adapters import router as kep_router
+from server.api.endpoints.users import router as users_router
 
 
 api_router = APIRouter()
 
 api_router.include_router(workspaces_router, prefix="/workspaces", tags=["workspaces"])
-api_router.include_router(users_router, prefix="/workspaces", tags=["users"])
-api_router.include_router(api_keys_router, prefix="/workspaces", tags=["api-keys"])
 api_router.include_router(softwares_router, prefix="/softwares", tags=["softwares"])
+api_router.include_router(mas_router, prefix="/workspaces", tags=["multi-agentic-systems"])
+api_router.include_router(reasoners_router, prefix="/workspaces", tags=["reasoners"])
+api_router.include_router(kep_router, prefix="/workspaces", tags=["knowledge-adapters"])
+api_router.include_router(users_router, prefix="/users", tags=["users"])

@@ -1,148 +1,19 @@
-from fastapi import APIRouter, HTTPException, status
-from datetime import datetime, timezone
-import uuid
+from fastapi import APIRouter, status
 
-from server.schemas.user import UserCreate, UserResponse, UserDetail
-from server.models.user import User
-from server.storage.memory import storage
+from server.schemas.user import Users
+from server.services.user import user_service
 
 router = APIRouter()
 
 
-@router.post(
-    "/{workspace_id}/users",
-    response_model=UserResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-def create_user_in_workspace(workspace_id: str, user_data: UserCreate):
+@router.get("/", status_code=status.HTTP_200_OK, response_model=Users)
+def list_users():
     """
-    Create a new user in a workspace
+    Get all users
 
-    - **workspace_id**: UUID of the workspace
-    - **name**: Name of the user (required)
-    - **email**: Email address of the user (required)
+    Returns a list of all active users in the database
 
-    Returns the UUID of the created user
+    Returns:
+        Users: List of users with total count
     """
-    if not storage.workspace_exists(workspace_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workspace not found",
-        )
-
-    user_id = str(uuid.uuid4())
-
-    user = User(
-        id=user_id,
-        name=user_data.name,
-        email=user_data.email,
-        workspace_id=workspace_id,
-        created_at=datetime.now(timezone.utc),
-    )
-
-    storage.create_user(user)
-
-    return UserResponse(id=user_id)
-
-
-@router.get("/{workspace_id}/users", response_model=list[UserDetail])
-def list_users_in_workspace(workspace_id: str):
-    """
-    List all users in a workspace
-
-    - **workspace_id**: UUID of the workspace
-
-    Returns a list of all users in the specified workspace
-    """
-    if not storage.workspace_exists(workspace_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workspace not found",
-        )
-
-    users = storage.get_users_by_workspace(workspace_id)
-
-    workspace = storage.get_workspace(workspace_id)
-    workspace_name = workspace.name if workspace else "Unknown Workspace"
-
-    return [
-        UserDetail(
-            id=user.id,
-            name=user.name,
-            email=user.email,
-            workspace_id=user.workspace_id,
-            workspace_name=workspace_name,
-            created_at=user.created_at,
-        )
-        for user in users
-    ]
-
-
-@router.get("/{workspace_id}/users/{user_id}", response_model=UserDetail)
-def get_user_in_workspace(workspace_id: str, user_id: str):
-    """
-    Get a specific user in a workspace
-
-    - **workspace_id**: UUID of the workspace
-    - **user_id**: UUID of the user
-
-    Returns the user details
-    """
-    if not storage.workspace_exists(workspace_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workspace not found",
-        )
-
-    user = storage.get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    if user.workspace_id != workspace_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found in this workspace",
-        )
-
-    workspace = storage.get_workspace(workspace_id)
-    workspace_name = workspace.name if workspace else "Unknown Workspace"
-
-    return UserDetail(
-        id=user.id,
-        name=user.name,
-        email=user.email,
-        workspace_id=user.workspace_id,
-        workspace_name=workspace_name,
-        created_at=user.created_at,
-    )
-
-
-@router.delete("/{workspace_id}/users/{user_id}")
-def delete_user_in_workspace(workspace_id: str, user_id: str):
-    """
-    Delete a user from a workspace
-
-    - **workspace_id**: UUID of the workspace
-    - **user_id**: UUID of the user to delete
-
-    Returns success message
-    """
-    if not storage.workspace_exists(workspace_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workspace not found",
-        )
-
-    user = storage.get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    if user.workspace_id != workspace_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found in this workspace",
-        )
-
-    storage.delete_user(user_id)
-
-    return {"message": "User deleted successfully"}
+    return user_service.list_users()

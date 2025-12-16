@@ -1,44 +1,54 @@
-from pydantic import BaseModel, Field, EmailStr, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-
-
-class UserCreate(BaseModel):
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "name": "John Doe",
-                "email": "john.doe@company.com",
-            }
-        }
-    )
-
-    name: str = Field(..., description="Name of the user", min_length=1, max_length=100)
-    email: EmailStr = Field(..., description="Email address of the user")
+from typing import List, Optional
 
 
 class UserResponse(BaseModel):
-    model_config = ConfigDict(json_schema_extra={"example": {"id": "550e8400-e29b-41d4-a716-446655440001"}})
+    model_config = ConfigDict(json_schema_extra={"example": {"id": "550e8400-e29b-41d4-a716-446655440000"}})
 
     id: str = Field(..., description="Unique identifier for the user")
 
 
-class UserDetail(BaseModel):
+class User(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "id": "550e8400-e29b-41d4-a716-446655440001",
-                "name": "John Doe",
-                "email": "john.doe@company.com",
-                "workspace_id": "550e8400-e29b-41d4-a716-446655440000",
-                "workspace_name": "Development Team",
+                "id": "550e8400-e29b-41d4-a716-446655440000",
+                "username": "admin",
+                "domain": "tkf.local",
+                "role": "Software Admin",
                 "created_at": "2024-11-14T10:30:00Z",
+                "updated_at": "2024-11-14T11:15:00Z",
             }
         }
     )
 
     id: str
-    name: str
-    email: str
-    workspace_id: str
-    workspace_name: str
+    username: str
+    domain: str
+    role: str
     created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
+class Users(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "users": [
+                    {
+                        "id": "550e8400-e29b-41d4-a716-446655440000",
+                        "username": "admin",
+                        "domain": "tkf.local",
+                        "role": "Software Admin",
+                        "created_at": "2024-11-14T10:30:00Z",
+                        "updated_at": "2024-11-14T11:15:00Z",
+                    }
+                ],
+                "total": 1,
+            }
+        }
+    )
+
+    users: List[User]
+    total: int
