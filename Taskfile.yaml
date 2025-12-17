@@ -65,6 +65,15 @@ tasks:
     cmds:
       - poetry run pytest tests/test_api_keys.py -v
 
+  test-tkf:
+    desc: Run only tkf GraphDB related tests
+    cmds:
+      - poetry run pytest src/server/schemas/test_tkf.py -v
+      - poetry run pytest src/server/adapters/test_adapter_graphdb_neo4j.py -v
+      - poetry run pytest src/server/database/graph_db/neo4j/models/test_node.py -v
+      - poetry run pytest src/server/database/graph_db/neo4j/models/test_edge.py -v
+      - poetry run pytest src/server/api/endpoints/test_tkf.py -v
+
   lint:
     desc: Run linting and formatting
     cmds:

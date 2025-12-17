@@ -14,11 +14,15 @@ CREATE TABLE "knowledge_adapters" (
   "deleted_at" timestamp NULL,
   PRIMARY KEY ("id")
 );
+
 -- Create index "idx_kep_workspace_id" to table: "knowledge_adapters"
 CREATE INDEX "idx_kep_workspace_id" ON "knowledge_adapters" ("workspace_id");
+
 -- Create index "idx_kep_software_type" to table: "knowledge_adapters"
 CREATE INDEX "idx_kep_software_type" ON "knowledge_adapters" ("software_type");
+
 -- Create index "idx_kep_deleted_at" to table: "knowledge_adapters"
 CREATE INDEX "idx_kep_deleted_at" ON "knowledge_adapters" ("deleted_at");
+
 -- Create unique index on name within workspace (excluding soft-deleted records)
 CREATE UNIQUE INDEX "idx_kep_workspace_name_unique" ON "knowledge_adapters" ("workspace_id", "name") WHERE "deleted_at" IS NULL;

@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from server.api.endpoints.workspaces import router as workspaces_router
 from server.api.endpoints.softwares import router as softwares_router
+from server.api.endpoints.tkf import router as tkf_router
 from server.api.endpoints.mas import router as mas_router
 from server.api.endpoints.reasoners import router as reasoners_router
 from server.api.endpoints.knowledge_adapters import router as kep_router
@@ -16,3 +17,4 @@ api_router.include_router(mas_router, prefix="/workspaces", tags=["multi-agentic
 api_router.include_router(reasoners_router, prefix="/workspaces", tags=["reasoners"])
 api_router.include_router(kep_router, prefix="/workspaces", tags=["knowledge-adapters"])
 api_router.include_router(users_router, prefix="/users", tags=["users"])
+api_router.include_router(tkf_router, prefix="/tkf", tags=["tkf"])

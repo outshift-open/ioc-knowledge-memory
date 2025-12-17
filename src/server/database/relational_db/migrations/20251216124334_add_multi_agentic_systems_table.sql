@@ -13,6 +13,8 @@ CREATE TABLE "multi_agentic_systems" (
   "deleted_at" timestamp NULL,
   PRIMARY KEY ("id")
 );
+
+-- Create indexes
 CREATE INDEX "idx_mas_workspace_id" ON "multi_agentic_systems" ("workspace_id");
 CREATE INDEX "idx_mas_deleted_at" ON "multi_agentic_systems" ("deleted_at");
 CREATE UNIQUE INDEX "idx_mas_workspace_name_unique" ON "multi_agentic_systems" ("workspace_id", "name") WHERE "deleted_at" IS NULL;

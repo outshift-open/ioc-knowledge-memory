@@ -23,21 +23,19 @@ def client():
 @pytest.fixture(autouse=True)
 def setup_test_environment():
     """Set up test environment with clean database."""
-    
+
     try:
         db = RelationalDB()
         db.init()
         # Recreate database tables to always match current models
         Base.metadata.drop_all(bind=db.engine)
         Base.metadata.create_all(bind=db.engine)
-        
+
         # Insert default software templates for testing
         session = db.session_factory()
         try:
             # Check if software templates already exist
-            existing_software = session.query(Software).filter(
-                Software.type == "KnowledgeAdapterTemplates"
-            ).first()
+            existing_software = session.query(Software).filter(Software.type == "KnowledgeAdapterTemplates").first()
             if not existing_software:
                 knowledge_adapter_templates = Software(
                     type="KnowledgeAdapterTemplates",
@@ -45,35 +43,37 @@ def setup_test_environment():
                         "info-extraction": {
                             "use_crf": True,
                             "entities": ["PERSON", "ORG", "GPE", "DATE"],
-                            "preprocessing": {
-                                "lowercase": False,
-                                "tokenizer": "wordpiece",
-                                "remove_punctuation": True
-                            },
-                            "confidence_threshold": 0.85
+                            "preprocessing": {"lowercase": False, "tokenizer": "wordpiece", "remove_punctuation": True},
+                            "confidence_threshold": 0.85,
                         },
                         "otel": {
-                            "resourceSpans": [{
-                                "resource": {
-                                    "attributes": [
-                                        {"key": "service.name", "value": {"stringValue": "my-service"}},
-                                        {"key": "host.name", "value": {"stringValue": "my-host"}}
-                                    ]
-                                },
-                                "scopeSpans": [{
-                                    "scope": {"name": "my-library", "version": "1.0.0"},
-                                    "spans": [{
-                                        "kind": "SPAN_KIND_SERVER",
-                                        "name": "parent-operation",
-                                        "spanId": "abcdef0123456789",
-                                        "traceId": "0123456789abcdef0123456789abcdef",
-                                        "startTimeUnixNano": "1678886400000000000",
-                                        "endTimeUnixNano": "1678886400000000500"
-                                    }]
-                                }]
-                            }]
-                        }
-                    }
+                            "resourceSpans": [
+                                {
+                                    "resource": {
+                                        "attributes": [
+                                            {"key": "service.name", "value": {"stringValue": "my-service"}},
+                                            {"key": "host.name", "value": {"stringValue": "my-host"}},
+                                        ]
+                                    },
+                                    "scopeSpans": [
+                                        {
+                                            "scope": {"name": "my-library", "version": "1.0.0"},
+                                            "spans": [
+                                                {
+                                                    "kind": "SPAN_KIND_SERVER",
+                                                    "name": "parent-operation",
+                                                    "spanId": "abcdef0123456789",
+                                                    "traceId": "0123456789abcdef0123456789abcdef",
+                                                    "startTimeUnixNano": "1678886400000000000",
+                                                    "endTimeUnixNano": "1678886400000000500",
+                                                }
+                                            ],
+                                        }
+                                    ],
+                                }
+                            ]
+                        },
+                    },
                 )
                 session.add(knowledge_adapter_templates)
                 session.commit()
@@ -85,9 +85,9 @@ def setup_test_environment():
     except Exception as e:
         print(f"Database setup failed: {e}")
         pass
-    
+
     yield
-    
+
     # Clean up after test
     try:
         db = RelationalDB()

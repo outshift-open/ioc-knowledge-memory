@@ -1,9 +1,12 @@
 import os
 import logging
+import time
 from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
 from neo4j import AsyncGraphDatabase, AsyncDriver
 from neo4j.exceptions import ServiceUnavailable, AuthError
+from server.database.graph_db.neo4j.models.node import Node
+from server.database.graph_db.neo4j.models.edge import Edge
 
 # Used when environment variables are not configured
 NEO4J_DATABASE_DEFAULT = "tkf"
@@ -14,6 +17,7 @@ NEO4J_PORT_DEFAULT = "7687"
 NEO4J_SCHEME_DEFAULT = "bolt"
 NEO4J_MAX_CONNECTION_POOL_SIZE_DEFAULT = 10
 # there is no server specific config for connection lifetime, this is client only config.
+# default = 3600 seconds
 NEO4J_MAX_CONNECTION_LIFETIME_DEFAULT = 3600
 
 
@@ -21,6 +25,7 @@ class GraphDB:
     """
     Async Neo4j Graph Database connection manager with connection pooling.
     Implements singleton pattern for application-wide database access.
+    https://neo4j.com/docs/api/python-driver/current/async_api.html#
     """
 
     _instance = None
@@ -35,6 +40,17 @@ class GraphDB:
         """Initialize the GraphDB instance."""
         # Get logger instance (logging is setup in main.py)
         self.logger = logging.getLogger(__name__)
+
+    async def verify_connectivity(self):
+        """Verify that the driver can connect to the database."""
+        if self._driver is None:
+            raise RuntimeError("Driver not initialized. Call init() first.")
+
+        async with self._driver.session(database=self.database) as session:
+            result = await session.run("RETURN 1 as test")
+            record = await result.single()
+            if record["test"] != 1:
+                raise RuntimeError("Database connectivity test failed")
 
     async def init(
         self,
@@ -98,7 +114,12 @@ class GraphDB:
             )
 
             # Verify connectivity
-            await self.verify_connectivity()
+            try:
+                await self.verify_connectivity()
+                self.logger.info("Successfully connected to Neo4j database")
+            except Exception as e:
+                self.logger.error(f"Failed to verify connectivity: {e}")
+                raise
 
         except (ServiceUnavailable, AuthError) as e:
             self.logger.error(f"Failed to connect to Neo4j: {e}")
@@ -108,17 +129,6 @@ class GraphDB:
             raise
 
         self.logger.info(f"Successfully connected to database at {uri}")
-
-    async def verify_connectivity(self):
-        """Verify that the driver can connect to the database."""
-        if self._driver is None:
-            raise RuntimeError("Driver not initialized. Call init() first.")
-
-        async with self._driver.session(database=self.database) as session:
-            result = await session.run("RETURN 1 as test")
-            record = await result.single()
-            if record["test"] != 1:
-                raise RuntimeError("Database connectivity test failed")
 
     @asynccontextmanager
     async def get_session(self, **session_config):
@@ -146,6 +156,223 @@ class GraphDB:
             raise
         finally:
             await session.close()
+
+    async def node_exists(self, node):
+        """Check if a node exists in the database.
+
+        Args:
+            node: Node object to check
+
+        Returns:
+            tuple: (exists: bool, node_data: dict or None) - Returns (True, node_data) if node exists,
+                  (False, None) if it doesn't exist
+        """
+        if not node:
+            return False, None
+
+        try:
+            exists_query, exists_params = node.to_cypher_exists()
+            async with self.get_session() as session:
+                result = await session.run(exists_query, **exists_params)
+                record = await result.single()
+                if record:
+                    node_data = record["n"]
+                    self.logger.debug(
+                        f"Found existing node - ID: {node.id}, "
+                        f"Labels: {node_data.labels}, "
+                        f"Properties: {node_data.properties}"
+                    )
+                    return True, node_data
+
+            return False, None
+
+        except Exception as e:
+            self.logger.error(f"Error checking if edge exists: {e}", exc_info=True)
+            return False, None
+
+    async def edge_exists(self, edge):
+        """Check if an edge exists in the database.
+
+        Args:
+            edge: Edge object to check
+
+        Returns:
+            tuple: (exists: bool, edge_data: dict or None) - Returns (True, edge_data) if edge exists,
+                  (False, None) if it doesn't exist
+        """
+        if not edge:
+            return False, None
+
+        try:
+            exists_query, exists_params = edge.to_cypher_exists()
+            async with self.get_session() as session:
+                result = await session.run(exists_query, **exists_params)
+                record = await result.single()
+                if record:
+                    edge_data = record["r"]
+                    self.logger.debug(
+                        f"Found existing edge - ID: {edge.id}, "
+                        f"Type: {edge.relation}, "
+                        f"Properties: {edge_data.properties}"
+                    )
+                    return True, edge_data
+
+            return False, None
+
+        except Exception as e:
+            self.logger.error(f"Error checking if edge exists: {e}", exc_info=True)
+            return False, None
+
+    async def _check_nodes_exist(self, tx, nodes):
+        """Check if any nodes already exist in the database.
+
+        Args:
+            tx: The current transaction
+            nodes: List of Node objects to check
+
+        Returns:
+            List[str]: List of IDs of nodes that already exist
+        """
+        existing_nodes = []
+        for node in nodes or []:
+            exists_query, exists_params = node.to_cypher_exists()
+            result = await tx.run(exists_query, **exists_params)
+            if await result.single():
+                existing_nodes.append(node.id)
+        return existing_nodes
+
+    async def _check_edges_exist(self, tx, edges):
+        """Check if any edges already exist in the database.
+
+        Args:
+            tx: The current transaction
+            edges: List of Edge objects to check
+
+        Returns:
+            List[str]: List of IDs of edges that already exist
+        """
+        existing_edges = []
+        for edge in edges or []:
+            exists_query, exists_params = edge.to_cypher_exists()
+            result = await tx.run(exists_query, **exists_params)
+            if await result.single():
+                existing_edges.append(edge.id)
+        return existing_edges
+
+    async def save(self, nodes=None, edges=None, force_replace=False):
+        """
+        Save nodes and edges in a single transaction.
+        Checks for node existence before creating them to prevent duplicates.
+
+        Args:
+            nodes: List of Node objects
+            edges: List of Edge objects
+            force_replace: bool - if True, force replace existing nodes and edges
+
+        Returns:
+            bool: True if all operations were successful, False otherwise
+        """
+        self.logger.debug(f"Starting save with {len(nodes or [])} nodes and {len(edges or [])} edges")
+
+        if not nodes and not edges:
+            self.logger.warning("No nodes or edges provided for save")
+            return True, "No nodes or edges provided for save"
+
+        try:
+            # Get a session with a transaction
+            async with self.driver.session(database=self.database) as session:
+                # Start a transaction
+                tx = await session.begin_transaction()
+                try:
+                    existing_nodes = await self._check_nodes_exist(tx, nodes)
+                    existing_edges = await self._check_edges_exist(tx, edges)
+                    if not force_replace:
+                        if existing_nodes or existing_edges:
+                            error_msg = ""
+                            if existing_nodes:
+                                error_msg += f"Nodes already exist with IDs: {', '.join(existing_nodes)}."
+                            if existing_edges:
+                                error_msg += f"Edges already exist with IDs: {', '.join(existing_edges)}."
+                            error_msg += " Use force_replace: true to recreate"
+                            return False, error_msg
+                    else:
+                        self.logger.info("******* Force replace enabled, deleting existing nodes and edges ********")
+                        # Find nodes to delete (those that exist in both existing_nodes and nodes)
+                        nodes_to_delete = [n for n in nodes if n.id in existing_nodes] if nodes else []
+                        # Delete existing nodes and associated edges
+                        for node in nodes_to_delete:
+                            cypher, params = node.to_cypher_delete()
+                            self.logger.info(f"Deleting node {node.id}")
+                            self.logger.debug(f"Cypher: {node.to_executable_cypher(cypher, params)}")
+                            result = await tx.run(cypher, **params)
+                            self.logger.info(f"Node {node.id} and associated edges deleted")
+
+                    self.logger.info("******* Creating nodes ********")
+                    # Create nodes
+                    for node in nodes or []:
+                        cypher, params = node.to_cypher_create()
+                        self.logger.info(node.to_executable_cypher(cypher, params))
+                        result = await tx.run(cypher, **params)
+                        self.logger.debug(f"Node {node.id} save result: {result}")
+
+                    # Create edges (after all nodes are saved)
+                    # If associated nodes do not exist raise an exception
+                    self.logger.info("******* Creating edges ********")
+                    for edge in edges or []:
+                        cypher, params = edge.to_cypher_create()
+                        self.logger.info(edge.to_executable_cypher(cypher, params))
+                        result = await tx.run(cypher, **params)
+                        self.logger.debug(f"Edge {edge.id} save result: {result}")
+
+                    # If we get here, commit the transaction
+                    await tx.commit()
+                    self.logger.info(f"Successfully saved {len(nodes)} nodes and {len(edges)} edges")
+
+                    return True, f"Saved {len(nodes)} nodes and {len(edges)} edges"
+
+                except Exception as e:
+                    self.logger.error(f"Save Transaction failed: {e}", exc_info=True)
+                    if tx:
+                        await tx.rollback()
+                        self.logger.debug("Save Transaction rolled back")
+                    raise
+
+        except Exception as e:
+            self.logger.error(f"Error in save operation: {e}", exc_info=True)
+            raise  # Re-raise the exception
+
+    async def delete(self, nodes):
+        """
+        Delete nodes and associated edges in a single transaction.
+
+        Args:
+            nodes: List of Node objects
+        """
+        try:
+            # Get a session with a transaction
+            async with self.driver.session(database=self.database) as session:
+                # Start a transaction
+                tx = await session.begin_transaction()
+                try:
+                    # Delete all nodes
+                    for node in nodes or []:
+                        cypher, params = node.to_cypher_delete()
+                        self.logger.info(node.to_executable_cypher(cypher, params))
+                        await tx.run(cypher, **params)
+
+                    # If we get here, commit the transaction
+                    await tx.commit()
+                    self.logger.info(f"Successfully deleted {len(nodes)} nodes and associated edges")
+                    return True, f"Deleted {len(nodes)} nodes and associated edges"
+
+                except Exception as e:
+                    self.logger.error(f"Delete Transaction failed: {e}")
+                    await tx.rollback()
+                    raise  # Re-raise the exception
+
+        except Exception as e:
+            self.logger.error(f"Delete Session error: {e}")
+            raise  # Re-raise the exception
 
     async def execute_query(
         self, query: str, parameters: Dict[str, Any] = None, **session_config

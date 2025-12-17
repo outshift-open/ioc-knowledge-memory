@@ -12,11 +12,15 @@ CREATE TABLE "reasoners" (
   "deleted_at" timestamp NULL,
   PRIMARY KEY ("id")
 );
+
 -- Create index "idx_reasoners_workspace_id" to table: "reasoners"
 CREATE INDEX "idx_reasoners_workspace_id" ON "reasoners" ("workspace_id");
+
 -- Create index "idx_reasoners_mas_id" to table: "reasoners"
 CREATE INDEX "idx_reasoners_mas_id" ON "reasoners" ("mas_id");
+
 -- Create index "idx_reasoners_deleted_at" to table: "reasoners"
 CREATE INDEX "idx_reasoners_deleted_at" ON "reasoners" ("deleted_at");
+
 -- Create unique index on name within workspace (excluding soft-deleted records)
 CREATE UNIQUE INDEX "idx_reasoners_workspace_name_unique" ON "reasoners" ("workspace_id", "name") WHERE "deleted_at" IS NULL;
