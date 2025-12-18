@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgresUser}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgresPW}
     ports:
-      - "${POSTGRES_PORT:-5455}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - timescaledb_data:/var/lib/timescaledb/data
 

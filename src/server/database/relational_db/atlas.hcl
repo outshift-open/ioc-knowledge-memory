@@ -12,7 +12,7 @@ locals {
   postgres_user = getenv("POSTGRES_USER") != "" ? getenv("POSTGRES_USER") : "postgresUser"
   postgres_password = getenv("POSTGRES_PASSWORD") != "" ? getenv("POSTGRES_PASSWORD") : "postgresPW"
   postgres_host = getenv("POSTGRES_HOST") != "" ? getenv("POSTGRES_HOST") : "localhost"
-  postgres_port = getenv("POSTGRES_PORT") != "" ? getenv("POSTGRES_PORT") : "5455"
+  postgres_port = getenv("POSTGRES_PORT") != "" ? getenv("POSTGRES_PORT") : "5432"
   postgres_db = getenv("POSTGRES_DB") != "" ? getenv("POSTGRES_DB") : "tkf"
 }
 

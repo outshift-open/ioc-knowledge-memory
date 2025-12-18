@@ -11,7 +11,7 @@ POSTGRES_DB_DEFAULT = "tkf"
 POSTGRES_USER_DEFAULT = "postgresUser"
 POSTGRES_PASSWORD_DEFAULT = "postgresPW"
 POSTGRES_HOST_DEFAULT = "localhost"
-POSTGRES_PORT_DEFAULT = "5455"
+POSTGRES_PORT_DEFAULT = "5432"
 
 
 class RelationalDB:
@@ -47,7 +47,7 @@ class RelationalDB:
             user: Database user (default: from POSTGRES_USER or 'postgresUser')
             password: Database password (default: from POSTGRES_PASSWORD or 'postgresPW')
             host: Database host (default: from POSTGRES_HOST or 'localhost')
-            port: Database port (default: from POSTGRES_PORT or '5455')
+            port: Database port (default: from POSTGRES_PORT or '5432')
 
         Raises:
             Exception: If there's an error initializing the database connection
