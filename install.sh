@@ -36,6 +36,10 @@ install_task() {
 # Install Poetry
 has_cmd poetry || { echo "Installing Poetry..."; install_poetry; }
 
+if ! echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then
+        export PATH="$HOME/.local/bin:$PATH"
+fi
+
 # Install dependencies  
 poetry install
 
