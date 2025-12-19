@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, text, Index
+from sqlalchemy import Column, String, DateTime, text, Index, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 
 from server.database.relational_db.models import Base
@@ -9,7 +9,7 @@ class KnowledgeAdapter(Base):
 
     id = Column(String(36), primary_key=True, server_default=text("gen_random_uuid()::text"))
 
-    workspace_id = Column(String(36), nullable=False)
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False)
     name = Column(String(255), nullable=False)
     mas_ids = Column(JSONB, nullable=False)
     type = Column(String(50), nullable=False)

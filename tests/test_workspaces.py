@@ -101,3 +101,54 @@ class TestWorkspaceEndpoints:
         response = client.get("/api/workspaces/invalid-id")
 
         assert response.status_code == 404
+
+    def test_delete_workspace_blocked_then_succeeds(self, client, sample_workspace_data):
+        """Workspace delete should be blocked with dependents, then succeed after cleanup."""
+        ws_resp = client.post("/api/workspaces", json=sample_workspace_data)
+        assert ws_resp.status_code == 201
+        workspace_id = ws_resp.json()["id"]
+
+        mas_data = {
+            "name": "WS-Del Test MAS",
+            "description": "",
+            "agents": {"a1": {"type": "t"}},
+            "config": {},
+        }
+        mas_resp = client.post(f"/api/workspaces/{workspace_id}/multi-agentic-systems", json=mas_data)
+        assert mas_resp.status_code == 201
+        mas_id = mas_resp.json()["id"]
+
+        reasoner_data = {"name": "WS-Del Reasoner", "mas_id": mas_id, "config": {}}
+        r_resp = client.post(f"/api/workspaces/{workspace_id}/reasoners", json=reasoner_data)
+        assert r_resp.status_code == 201
+        reasoner_id = r_resp.json()["id"]
+
+        kep_data = {
+            "name": "WS-Del KEP",
+            "mas_ids": [mas_id],
+            "type": "pull",
+            "software_type": "info-extraction",
+            "software_config": {"entities": ["PERSON"], "confidence_threshold": 0.8},
+        }
+        kep_resp = client.post(f"/api/workspaces/{workspace_id}/knowledge-adapters", json=kep_data)
+        assert kep_resp.status_code == 201
+        kep_id = kep_resp.json()["id"]
+
+        # Attempt to delete workspace should be blocked (409) due to dependents
+        del_ws_resp_blocked = client.delete(f"/api/workspaces/{workspace_id}")
+        assert del_ws_resp_blocked.status_code == 409
+        assert "Workspace has dependent objects" in del_ws_resp_blocked.json()["detail"]
+
+        # Delete dependents first 
+        del_r_resp = client.delete(f"/api/workspaces/{workspace_id}/reasoners/{reasoner_id}")
+        assert del_r_resp.status_code == 200
+
+        del_kep_resp = client.delete(f"/api/workspaces/{workspace_id}/knowledge-adapters/{kep_id}")
+        assert del_kep_resp.status_code == 200
+
+        del_mas_resp = client.delete(f"/api/workspaces/{workspace_id}/multi-agentic-systems/{mas_id}")
+        assert del_mas_resp.status_code == 200
+
+        # Workspace delete succeeds
+        del_ws_resp_ok = client.delete(f"/api/workspaces/{workspace_id}")
+        assert del_ws_resp_ok.status_code == 200

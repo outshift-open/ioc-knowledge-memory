@@ -94,6 +94,7 @@ def setup_test_environment():
         # Clean up database tables (keep schema)
         session = db.session_factory()
         try:
+            session.query(Software).delete()
             session.query(KnowledgeAdapter).delete()
             session.query(Reasoner).delete()
             session.query(MultiAgenticSystem).delete()

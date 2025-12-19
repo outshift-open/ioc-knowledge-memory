@@ -1,4 +1,4 @@
-h1:BNIAIslRH+Ju91KsmklYbx/4ntgkvIJ+AyVG5WNPcSE=
+h1:3G2L2Dw8PIuHv/DfdsDEvPrShykXhDMZ0/vmu/T2arA=
 20251125234207_software table.sql h1:LsYotw7Y0UcJ3MrC3dQjJeM1tQvCyzV2AoZ3p7YFhdA=
 20251201192513_update software table type field length.sql h1:uLsCjIMVthN6zDUyXfEmZHvW5z6zo8aWXHUhMfmicMs=
 20251203175820_add users table.sql h1:2eisVi6V4H9uriV9WVQFJwCm3vMxjTYr4KuDVsrGLeU=
@@ -15,3 +15,6 @@ h1:BNIAIslRH+Ju91KsmklYbx/4ntgkvIJ+AyVG5WNPcSE=
 20251216212210_audits_table_fix_created_updated_delted_by_fields.sql h1:3qZYEDusQxyqwyiiVgE1Kd9XFdkjtiq1rJdkeLVoYZw=
 20251217002748_audit_table_updates_for_audit_info.sql h1:+DsMysgYDezQrrrnWVFFV+/dnkIyqrK7BvhPW/BZNNs=
 20251217003907_audit_table_updates_print_repr.sql h1:QaoXRXV+kySKjTpY+GI+c+0grzrflHRbAgqWOgrC+w4=
+20251218010101_add_fk_mas_workspace.sql h1:++NH/sQhNrQ9SOjBZhBLiFqPTSGbfDr80HiOnh7eR74=
+20251218010110_add_fk_reasoners_workspace_mas.sql h1:uy98HfPm8d82bcDKDDjdL8gIO4dh7bWB7daKL0jN79w=
+20251218010120_add_fk_kep_workspace.sql h1:+ncT3jX/aHFn2aID0X8/1KZOIKANVYy0Duv8xMgkK70=

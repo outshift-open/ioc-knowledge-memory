@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Text, text, Index
+from sqlalchemy import Column, String, DateTime, Text, text, Index, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 
 from server.database.relational_db.models import Base
@@ -10,7 +10,7 @@ class MultiAgenticSystem(Base):
     id = Column(String(36), primary_key=True, server_default=text("gen_random_uuid()::text"))
 
     # Required fields
-    workspace_id = Column(String(36), nullable=False)
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False)
     name = Column(String(255), nullable=False)
 
     # Optional fields
