@@ -74,12 +74,12 @@ services:
       timeout: 5s
       retries: 5
 
-  api:
-    build: .
+  ci-tkf-data-logic-svc:
+    image: ghcr.io/cisco-eti/ci-tkf-data-logic-svc:latest
     profiles:
       - api
     ports:
-      - "8000:8000"
+      - "8001:8001"
     environment:
       - SERVICE_NAME=ci-tkf-data-logic-svc
       - APPLICATION_VERSION=dev
@@ -98,12 +98,14 @@ services:
       - ./src:/app/src
     restart: unless-stopped
     depends_on:
+      relational-db-migrate:
+        condition: service_completed_successfully
       generate-dek:
         condition: service_completed_successfully
       tkf-graph-vector-db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
       timeout: 10s
       retries: 3

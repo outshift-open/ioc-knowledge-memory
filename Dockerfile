@@ -27,4 +27,4 @@ ENV PYTHONPATH="/home/app/src"
 ENV PATH="/home/app/.local/bin:$PATH"
 
 # command to run on container start
-CMD [ "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000" ]
+CMD [ "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8001" ]
