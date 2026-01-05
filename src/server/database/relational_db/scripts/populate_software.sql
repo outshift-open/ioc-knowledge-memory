@@ -100,7 +100,7 @@ VALUES (
                 {
                   "key": "db.statement",
                   "value": {
-                    "stringValue": "SELECT * FROM users"
+                    "stringValue": "SELECT * FROM user"
                   }
                 }
               ],

@@ -1,4 +1,4 @@
-h1:3G2L2Dw8PIuHv/DfdsDEvPrShykXhDMZ0/vmu/T2arA=
+h1:bauwy2tU8CjF6+p/7rNwmFVQPQk5aELrCPyuOgqEFb4=
 20251125234207_software table.sql h1:LsYotw7Y0UcJ3MrC3dQjJeM1tQvCyzV2AoZ3p7YFhdA=
 20251201192513_update software table type field length.sql h1:uLsCjIMVthN6zDUyXfEmZHvW5z6zo8aWXHUhMfmicMs=
 20251203175820_add users table.sql h1:2eisVi6V4H9uriV9WVQFJwCm3vMxjTYr4KuDVsrGLeU=
@@ -18,3 +18,7 @@ h1:3G2L2Dw8PIuHv/DfdsDEvPrShykXhDMZ0/vmu/T2arA=
 20251218010101_add_fk_mas_workspace.sql h1:++NH/sQhNrQ9SOjBZhBLiFqPTSGbfDr80HiOnh7eR74=
 20251218010110_add_fk_reasoners_workspace_mas.sql h1:uy98HfPm8d82bcDKDDjdL8gIO4dh7bWB7daKL0jN79w=
 20251218010120_add_fk_kep_workspace.sql h1:+ncT3jX/aHFn2aID0X8/1KZOIKANVYy0Duv8xMgkK70=
+20251219120000_rename_tables_to_singular.sql h1:Y+8f1fUqDXtf+xL6bKJhB5HVDNILjOVfs05BdjBA650=
+20251219121010_rename_indexes_constraints_to_singular.sql h1:A+w+HIrqywoDtWvFnlJRCWQjXR0M+lYhofBS0mvKgec=
+20251223090000_add_unique_index_workspace_name.sql h1:RjXKIhlwvyIAtMkZBhxxAdrco5QKqXmleSV3Mu4gX9U=
+20251223100000_add_unique_indexes_mas_reasoner_kep.sql h1:c6pOlXMRFY1MJ90vFDBleVBPubUQUFsIRLauavmtyK0=

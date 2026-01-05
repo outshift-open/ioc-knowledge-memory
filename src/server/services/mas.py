@@ -34,6 +34,22 @@ class MultiAgenticSystemService:
             session = db.get_session()
 
             try:
+                # Prevent duplicate active MAS names within the same workspace
+                existing = (
+                    session.query(MultiAgenticSystemModel)
+                    .filter(
+                        MultiAgenticSystemModel.workspace_id == workspace_id,
+                        MultiAgenticSystemModel.name == mas_data.name,
+                        MultiAgenticSystemModel.deleted_at.is_(None),
+                    )
+                    .first()
+                )
+                if existing:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"Multi-agentic system with name '{mas_data.name}' already exists in this workspace",
+                    )
+
                 new_mas = MultiAgenticSystemModel(
                     workspace_id=workspace_id,
                     name=mas_data.name,
@@ -62,6 +78,10 @@ class MultiAgenticSystemService:
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Database integrity error: {str(e)}",
                 )
+            except HTTPException:
+                session.rollback()
+                # Preserve specific HTTP error codes/messages (e.g., 409 duplicate)
+                raise
             except Exception as e:
                 session.rollback()
                 raise HTTPException(

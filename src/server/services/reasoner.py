@@ -50,6 +50,22 @@ class ReasonerService:
                         detail=f"Multi-agentic system with id '{reasoner_data.mas_id}' not found in this workspace",
                     )
 
+                # Prevent duplicate active Reasoner names within the same workspace
+                existing = (
+                    session.query(ReasonerModel)
+                    .filter(
+                        ReasonerModel.workspace_id == workspace_id,
+                        ReasonerModel.name == reasoner_data.name,
+                        ReasonerModel.deleted_at.is_(None),
+                    )
+                    .first()
+                )
+                if existing:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"Reasoner with name '{reasoner_data.name}' already exists in this workspace",
+                    )
+
                 # Create new reasoner
                 new_reasoner = ReasonerModel(
                     workspace_id=workspace_id,
@@ -72,7 +88,7 @@ class ReasonerService:
                 raise
             except IntegrityError as e:
                 session.rollback()
-                if "idx_reasoners_workspace_name_unique" in str(e):
+                if "idx_reasoner_workspace_name_unique" in str(e):
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
                         detail=f"Reasoner with name '{reasoner_data.name}' already exists in this workspace",

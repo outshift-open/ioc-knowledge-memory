@@ -4,7 +4,7 @@ from server.database.relational_db.models import Base
 
 
 class Audit(Base):
-    __tablename__ = "audits"
+    __tablename__ = "audit"
 
     # Primary key - UUID as string, auto-generated in database
     id = Column(String(36), primary_key=True, server_default=text("gen_random_uuid()::text"))
@@ -30,9 +30,9 @@ class Audit(Base):
 
     # Indexes
     __table_args__ = (
-        Index("idx_audits_deleted_at", "deleted_at"),
-        Index("idx_audits_request_id", "request_id"),
-        Index("idx_audits_audit_resource_id", "audit_resource_id"),
+        Index("idx_audit_deleted_at", "deleted_at"),
+        Index("idx_audit_request_id", "request_id"),
+        Index("idx_audit_audit_resource_id", "audit_resource_id"),
     )
 
     def __repr__(self):

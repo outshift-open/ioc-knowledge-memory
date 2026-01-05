@@ -5,7 +5,7 @@ from server.database.relational_db.models import Base
 
 
 class Workspace(Base):
-    __tablename__ = "workspaces"
+    __tablename__ = "workspace"
 
     id = Column(String(36), primary_key=True, server_default=text("gen_random_uuid()::text"))
 
@@ -32,6 +32,13 @@ class Workspace(Base):
     __table_args__ = (
         Index("idx_workspace_name", "name"),
         Index("idx_workspace_deleted_at", "deleted_at"),
+        # Enforce unique active names
+        Index(
+            "idx_workspace_name_unique",
+            "name",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
     )
 
     def __repr__(self):

@@ -79,6 +79,22 @@ class KnowledgeAdapterService:
                         detail=f"Software template '{kep_data.software_type}' not found",
                     )
 
+                # Prevent duplicate active KEP names within the same workspace
+                existing = (
+                    session.query(KnowledgeAdapterModel)
+                    .filter(
+                        KnowledgeAdapterModel.workspace_id == workspace_id,
+                        KnowledgeAdapterModel.name == kep_data.name,
+                        KnowledgeAdapterModel.deleted_at.is_(None),
+                    )
+                    .first()
+                )
+                if existing:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"Knowledge adapter with name '{kep_data.name}' already exists in this workspace",
+                    )
+
                 # Create new knowledge adapter
                 new_kep = KnowledgeAdapterModel(
                     workspace_id=workspace_id,

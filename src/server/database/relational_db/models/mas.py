@@ -5,12 +5,12 @@ from server.database.relational_db.models import Base
 
 
 class MultiAgenticSystem(Base):
-    __tablename__ = "multi_agentic_systems"
+    __tablename__ = "multi_agentic_system"
 
     id = Column(String(36), primary_key=True, server_default=text("gen_random_uuid()::text"))
 
     # Required fields
-    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False)
+    workspace_id = Column(String(36), ForeignKey("workspace.id"), nullable=False)
     name = Column(String(255), nullable=False)
 
     # Optional fields
@@ -34,6 +34,14 @@ class MultiAgenticSystem(Base):
     __table_args__ = (
         Index("idx_mas_workspace_id", "workspace_id"),
         Index("idx_mas_deleted_at", "deleted_at"),
+        # Enforce unique active MAS names within a workspace
+        Index(
+            "idx_mas_workspace_name_unique",
+            "workspace_id",
+            "name",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
     )
 
     def __repr__(self):

@@ -80,6 +80,21 @@ class WorkspaceService:
             session = db.get_session()
 
             try:
+                # Prevent duplicate active workspace names
+                existing = (
+                    session.query(WorkspaceModel)
+                    .filter(
+                        WorkspaceModel.name == workspace_data.name,
+                        WorkspaceModel.deleted_at.is_(None),
+                    )
+                    .first()
+                )
+                if existing:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"Workspace with name '{workspace_data.name}' already exists",
+                    )
+
                 new_workspace = WorkspaceModel(
                     name=workspace_data.name,
                     users=workspace_data.users or [],
@@ -95,6 +110,8 @@ class WorkspaceService:
             finally:
                 session.close()
 
+        except HTTPException:
+            raise
         except IntegrityError as e:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,

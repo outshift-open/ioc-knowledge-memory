@@ -4,7 +4,7 @@ from server.database.relational_db.models import Base
 
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = "user"
 
     # Primary key - UUID as string, auto-generated in database
     id = Column(String(36), primary_key=True, server_default=text("gen_random_uuid()::text"))
@@ -25,7 +25,7 @@ class User(Base):
     deleted_at = Column(DateTime, nullable=True)
 
     # Indexes
-    __table_args__ = (Index("idx_users_deleted_at", "deleted_at"),)
+    __table_args__ = (Index("idx_user_deleted_at", "deleted_at"),)
 
     def __repr__(self):
         return f"<User(id='{self.id}', username='{self.username}', domain='{self.domain}', role='{self.role}')>"

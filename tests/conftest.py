@@ -1,6 +1,77 @@
-"""
-Shared pytest fixtures and configuration for ci-tkf-data-logic-svc tests.
-"""
+"""Pytest fixtures and minimal test DB bootstrap."""
+import os
+import time
+import contextlib
+
+import psycopg2
+
+os.environ.setdefault("POSTGRES_DB", "tkf_test")
+os.environ.setdefault("POSTGRES_USER", "postgresUser")
+os.environ.setdefault("POSTGRES_PASSWORD", "postgresPW")
+os.environ.setdefault("POSTGRES_HOST", "localhost")
+
+
+def _ensure_test_database_exists(max_wait_seconds: int = 20) -> None:
+    """Ensure the test database exists on the configured host.
+
+    - Respects POSTGRES_HOST (e.g., 'tkf-relational-db' in CI)
+    - Tries candidate ports: POSTGRES_PORT, 5432, 5455
+    - Tries bootstrap DBs: 'postgres', 'tkf', 'template1'
+    - Retries until max_wait_seconds for containers to become ready
+    """
+    db_name = os.environ.get("POSTGRES_DB", "tkf_test")
+    user = os.environ.get("POSTGRES_USER", "postgresUser")
+    password = os.environ.get("POSTGRES_PASSWORD", "postgresPW")
+    host = os.environ.get("POSTGRES_HOST", "localhost")
+
+    candidate_ports = []
+    if os.environ.get("POSTGRES_PORT"):
+        candidate_ports.append(str(os.environ["POSTGRES_PORT"]))
+    for p in ("5432", "5455"):
+        if p not in candidate_ports:
+            candidate_ports.append(p)
+
+    bootstrap_dbs = ("postgres", "tkf", "template1")
+
+    deadline = time.time() + max_wait_seconds
+    last_error = None
+
+    while time.time() < deadline:
+        for port in candidate_ports:
+            for bootstrap_db in bootstrap_dbs:
+                try:
+                    conn = psycopg2.connect(
+                        dbname=bootstrap_db,
+                        user=user,
+                        password=password,
+                        host=host,
+                        port=int(port),
+                    )
+                except Exception as e:
+                    last_error = e
+                    continue
+
+                try:
+                    conn.autocommit = True
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
+                        exists = cur.fetchone() is not None
+                        if not exists:
+                            cur.execute(f'CREATE DATABASE "{db_name}"')
+                    os.environ["POSTGRES_PORT"] = str(port)
+                    return
+                except Exception as e:
+                    last_error = e
+                finally:
+                    with contextlib.suppress(Exception):
+                        conn.close()
+        time.sleep(1)
+
+    if last_error:
+        print(f"Test DB bootstrap warning: could not ensure '{db_name}' exists on {host}:{candidate_ports}. Last error: {last_error}")
+    else:
+        print(f"Test DB bootstrap warning: could not ensure '{db_name}' exists on {host}:{candidate_ports} (no connection attempts succeeded)")
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -15,26 +86,27 @@ from server.database.relational_db.models.workspace import Workspace
 
 
 @pytest.fixture
-def client():
-    """Create a test client for the FastAPI app."""
+def client(setup_test_environment):
+    """Create a test client for the FastAPI app after DB setup."""
     return TestClient(app)
 
 
 @pytest.fixture(autouse=True)
 def setup_test_environment():
-    """Set up test environment with clean database."""
-
+    """Set up clean database per test session."""
+    os.environ["POSTGRES_DB"] = "tkf_test"
+    os.environ.setdefault("POSTGRES_USER", "postgresUser")
+    os.environ.setdefault("POSTGRES_PASSWORD", "postgresPW")
+    os.environ.setdefault("POSTGRES_HOST", "localhost")
+    _ensure_test_database_exists()
     try:
         db = RelationalDB()
         db.init()
-        # Recreate database tables to always match current models
         Base.metadata.drop_all(bind=db.engine)
         Base.metadata.create_all(bind=db.engine)
 
-        # Insert default software templates for testing
         session = db.session_factory()
         try:
-            # Check if software templates already exist
             existing_software = session.query(Software).filter(Software.type == "KnowledgeAdapterTemplates").first()
             if not existing_software:
                 knowledge_adapter_templates = Software(
@@ -88,10 +160,8 @@ def setup_test_environment():
 
     yield
 
-    # Clean up after test
     try:
         db = RelationalDB()
-        # Clean up database tables (keep schema)
         session = db.session_factory()
         try:
             session.query(Software).delete()

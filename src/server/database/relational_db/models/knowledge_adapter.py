@@ -5,11 +5,11 @@ from server.database.relational_db.models import Base
 
 
 class KnowledgeAdapter(Base):
-    __tablename__ = "knowledge_adapters"
+    __tablename__ = "knowledge_adapter"
 
     id = Column(String(36), primary_key=True, server_default=text("gen_random_uuid()::text"))
 
-    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False)
+    workspace_id = Column(String(36), ForeignKey("workspace.id"), nullable=False)
     name = Column(String(255), nullable=False)
     mas_ids = Column(JSONB, nullable=False)
     type = Column(String(50), nullable=False)
@@ -31,6 +31,14 @@ class KnowledgeAdapter(Base):
         Index("idx_kep_workspace_id", "workspace_id"),
         Index("idx_kep_software_type", "software_type"),
         Index("idx_kep_deleted_at", "deleted_at"),
+        # Enforce unique active Knowledge Adapter names within a workspace
+        Index(
+            "idx_kep_workspace_name_unique",
+            "workspace_id",
+            "name",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
     )
 
     def __repr__(self):
