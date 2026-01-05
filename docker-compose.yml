@@ -1,18 +1,113 @@
 services:
+  tkf-relational-db:
+    image: timescale/timescaledb-ha:pg17
+    profiles:
+      - db-only
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tkf}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "-c shared_preload_libraries=timescaledb"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - timescaledb_data:/var/lib/timescaledb/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -d ${POSTGRES_DB:-tkf} -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  relational-db-migrate:
+    image: arigaio/atlas:latest-alpine
+    profiles:
+      - api
+    command: migrate apply --dir file://migrations --env local
+    working_dir: /migrations
+    environment:
+      - POSTGRES_HOST=tkf-relational-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-tkf}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    depends_on:
+      tkf-relational-db:
+        condition: service_healthy
+    volumes:
+      - ./src/server/database/relational_db:/migrations
+
+  generate-dek:
+    build: .
+    profiles:
+      - api
+    command: python scripts/generate_DEK.py
+    environment:
+      - PYTHONPATH=/home/app/src
+    volumes:
+      - ./scripts:/home/app/scripts
+      - ./src:/home/app/src
+    depends_on:
+      - relational-db-migrate
+
+  tkf-graph-vector-db:
+    image: neo4j:5.26-community
+    profiles:
+      - db-only
+    ports:
+      - "${NEO4J_PORT_HTTP:-7474}:7474" # HTTP (UI)
+      - "${NEO4J_PORT:-7687}:7687" # Bolt (driver)
+    environment:
+      - NEO4J_initial_dbms_default__database=${NEO4J_DATABASE:-tkf}
+      - NEO4J_AUTH=none
+      - NEO4J_dbms_connector_http_listen__address=0.0.0.0:${NEO4J_PORT_HTTP:-7474}
+      - NEO4J_dbms_connector_bolt_listen__address=0.0.0.0:${NEO4J_PORT:-7687}
+      - NEO4J_dbms_memory_heap_initial__size=512m
+      - NEO4J_dbms_memory_heap_max__size=512m
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    restart: unless-stopped
+    healthcheck:
+      test: wget -q -O /dev/null http://localhost:7474 || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
     build: .
+    profiles:
+      - api
     ports:
       - "8000:8000"
     environment:
       - SERVICE_NAME=ci-tkf-data-logic-svc
       - APPLICATION_VERSION=dev
-      - LOG_LEVEL=INFO
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - POSTGRES_HOST=tkf-relational-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-tkf}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - NEO4J_HOST=tkf-graph-vector-db
+      - NEO4J_PORT=7687
+      - NEO4J_DATABASE=${NEO4J_DATABASE:-tkf}
     volumes:
       - ./src:/app/src
     restart: unless-stopped
+    depends_on:
+      generate-dek:
+        condition: service_completed_successfully
+      tkf-graph-vector-db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
+volumes:
+  timescaledb_data:
+  neo4j_data:
+  neo4j_logs:

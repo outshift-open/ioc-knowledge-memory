@@ -12,7 +12,9 @@ service_name = os.environ.get("SERVICE_NAME", "ci-tkf-data-logic-svc")
 def get_global_encryption_key() -> bytes:
     """Load and decode the base64-encoded DEK from config file"""
     try:
-        config_path = "config.json"
+        # Look for config.json in the same directory as this file (src/server/)
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(current_dir, "config.json")
 
         with open(config_path) as f:
             config = json.load(f)

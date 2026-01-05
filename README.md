@@ -21,20 +21,43 @@ For details please refer to the [README](src/server/database/relational_db/READM
 
 ## Quick Start
 
-**Option 1: Docker**
+### Deployment Options
+
+**Option 1: I have deployed neo4j and sql DB locally**
+
+```bash
+task run    # installs deps, applies db migrations, generates DEK, then runs
+```
+
+**Option 2: I don't have any db**
+
+```bash
+task docker-compose-db-up    # Start only databases (PostgreSQL and Neo4j) with db-only profile
+task run                     # installs deps, applies db migrations, generates DEK, then runs
+```
+
+**Option 3: Full stack deployment**
+
+```bash
+task docker-compose-up       # Start complete stack (application + databases)
+```
+
+### Alternative Quick Start Methods
+
+**Docker (all-in-one)**
 
 ```bash
 docker-compose up --build
 ```
 
-**Option 2:**
+**All-in-one setup (installs Poetry and Task globally)**
 
 ```bash
 ./install.sh
 task dev
 ```
 
-**Option 3: Manual setup (if you have Poetry/Task already)**
+**Manual setup (if you have Poetry/Task already)**
 
 ```bash
 poetry install

@@ -1,5 +1,8 @@
 version: "3"
 
+dotenv:
+  - .env
+
 vars:
   TASK_VERSION: v3.39.2
   TASK_INSTALL_DIR: ./bin
@@ -28,6 +31,11 @@ tasks:
     cmds:
       - poetry lock
 
+  generate-dek:
+    desc: Generate Data Encryption Key (DEK) and save to config.json
+    cmds:
+      - poetry run python scripts/generate_DEK.py
+
   dev:
     desc: Start development server with hot reload
     cmds:
@@ -35,10 +43,13 @@ tasks:
     dir: "{{.SRC_DIR}}"
 
   run:
-    desc: Start production server using main.py
+    desc: Start production server (installs deps, applies db migrations, generates DEK, then runs)
     cmds:
-      - poetry run python main.py
-    dir: "{{.SRC_DIR}}/server"
+      - task: install
+      - task: db-migrate-apply
+      - task: generate-dek
+      - poetry run python -m server.main
+    dir: "{{.SRC_DIR}}"
 
   test:
     desc: Run all tests with pytest
@@ -110,14 +121,24 @@ tasks:
       - docker run -p 8000:8000 ci-tkf-data-logic-svc:latest
 
   docker-compose-up:
-    desc: Start services with docker-compose
+    desc: Start all services with docker-compose
     cmds:
-      - docker-compose up
+      - docker compose --env-file .env --profile db-only --profile api up --build
 
   docker-compose-down:
-    desc: Stop services with docker-compose
+    desc: Stop all services with docker-compose
     cmds:
-      - docker-compose down
+      - docker compose --env-file .env --profile db-only --profile api down
+
+  docker-compose-db-up:
+    desc: Start only databases (PostgreSQL and Neo4j) with db-only profile
+    cmds:
+      - docker compose --env-file .env --profile db-only up -d
+
+  docker-compose-db-down:
+    desc: Stop only databases with db-only profile
+    cmds:
+      - docker compose --env-file .env --profile db-only down
 
   # Database migration tasks
   db-migrate-apply:
@@ -144,7 +165,6 @@ tasks:
     cmds:
       - /usr/local/bin/atlasgo migrate hash --dir "file://migrations"
     dir: "src/server/database/relational_db"
-
 
   help:
     desc: Show available tasks
