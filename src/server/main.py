@@ -80,6 +80,11 @@ instrumentator.instrument(app)
 instrumentator.expose(app, endpoint="/metrics")
 
 
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
+
 @app.get("/env")
 def env_var():
     return {
