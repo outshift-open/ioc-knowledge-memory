@@ -1,3 +1,5 @@
+# Legit Security Scanner Ignore Rules
+
 .env.example
 src/server/database/relational_db/README.md
 src/server/database/relational_db/atlas.hcl
@@ -5,3 +7,7 @@ src/server/config.json
 # files have been removed from these repository locations
 src/server/atlas.hcl
 scripts/populate_software.sql
+
+# Ignore Atlas binary URL
+# Used in Dockerfile to download Atlas CLI
+value_url_https://atlasgo.sh

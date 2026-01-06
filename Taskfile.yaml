@@ -6,20 +6,29 @@ dotenv:
 vars:
   TASK_VERSION: v3.39.2
   TASK_INSTALL_DIR: ./bin
-  SRC_DIR: ./src
+  SRC_DIR: "{{.PWD}}/src"
   PYTHON: python3
+  BIN_DIR: "{{.PWD}}/bin"
 
 tasks:
   deps:
-    desc: Install task binary locally in this repository
+    desc: Install all dependencies (Python and Atlas)
     cmds:
       - task: install
+      - task: install-atlas
     silent: false
 
   install:
     desc: Install Python dependencies using Poetry
     cmds:
       - poetry install
+
+  install-atlas:
+    desc: Install Atlas migration tool to bin directory
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - curl -sSf https://atlasgo.sh | sh -s -- --no-install -o {{.BIN_DIR}}/atlasgo -y
+      - chmod +x {{.BIN_DIR}}/atlasgo
 
   poetry-update:
     desc: Update Poetry dependencies
@@ -113,6 +122,7 @@ tasks:
           --build-arg GIT_COMMIT_SHA=$(git rev-parse HEAD) \
           --build-arg GIT_COMMIT_TIME=$(git log -1 --format=%cI) \
           --build-arg GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD) \
+          --no-cache \
           -t ci-tkf-data-logic-svc:latest .
 
   docker-run:
@@ -144,7 +154,7 @@ tasks:
   db-migrate-apply:
     desc: Apply pending database migrations
     cmds:
-      - /usr/local/bin/atlasgo migrate apply --dir "file://migrations" --env local
+      - '{{.BIN_DIR}}/atlasgo migrate apply --dir "file://migrations" --env local'
     dir: "src/server/database/relational_db"
 
   db-migrate-status:

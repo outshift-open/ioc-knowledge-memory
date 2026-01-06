@@ -44,13 +44,7 @@ task docker-compose-up       # Start complete stack (application + databases)
 
 ### Alternative Quick Start Methods
 
-**Docker (all-in-one)**
-
-```bash
-docker-compose up --build
-```
-
-**All-in-one setup (installs Poetry and Task globally)**
+**Dev setup (installs Poetry and Task globally)**
 
 ```bash
 ./install.sh
