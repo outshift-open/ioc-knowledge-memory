@@ -14,14 +14,9 @@ tasks:
   deps:
     desc: Install all dependencies (Python and Atlas)
     cmds:
-      - task: install
       - task: install-atlas
+      - task: install-poetry
     silent: false
-
-  install:
-    desc: Install Python dependencies using Poetry
-    cmds:
-      - poetry install
 
   install-atlas:
     desc: Install Atlas migration tool to bin directory
@@ -29,6 +24,13 @@ tasks:
       - mkdir -p {{.BIN_DIR}}
       - curl -sSf https://atlasgo.sh | sh -s -- --no-install -o {{.BIN_DIR}}/atlasgo -y
       - chmod +x {{.BIN_DIR}}/atlasgo
+    status:
+      - '[ -f "{{.BIN_DIR}}/atlasgo" ]'
+
+  install-poetry:
+    desc: Install Python dependencies using Poetry
+    cmds:
+      - poetry install
 
   poetry-update:
     desc: Update Poetry dependencies
@@ -54,7 +56,7 @@ tasks:
   run:
     desc: Start production server (installs deps, applies db migrations, generates DEK, then runs)
     cmds:
-      - task: install
+      - task: deps
       - task: db-migrate-apply
       - task: generate-dek
       - poetry run python -m server.main
