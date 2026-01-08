@@ -10,6 +10,7 @@ from server.schemas.workspace import (
 from server.services.workspace import workspace_service
 
 router = APIRouter()
+internal_router = APIRouter()
 
 
 @router.post(
@@ -76,4 +77,13 @@ def delete_workspace(workspace_id: str, _purge: bool = False):
 
     Returns success message
     """
-    return workspace_service.delete_workspace(workspace_id, _purge)
+    return workspace_service.delete_workspace(workspace_id, _purge, allow_default_delete=False)
+
+
+@internal_router.delete("/{workspace_id}", status_code=status.HTTP_200_OK)
+def delete_workspace_internal(workspace_id: str, _purge: bool = False):
+    """
+    Internal delete for workspaces. Allows deleting the Default Workspace,
+    still enforces dependency checks.
+    """
+    return workspace_service.delete_workspace(workspace_id, _purge, allow_default_delete=True)

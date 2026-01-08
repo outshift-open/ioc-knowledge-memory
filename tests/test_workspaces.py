@@ -152,3 +152,47 @@ class TestWorkspaceEndpoints:
         # Workspace delete succeeds
         del_ws_resp_ok = client.delete(f"/api/workspaces/{workspace_id}")
         assert del_ws_resp_ok.status_code == 200
+
+    def test_delete_default_workspace_public_forbidden(self, client):
+        """Public delete of Default Workspace should be forbidden (403)."""
+        create_resp = client.post("/api/workspaces", json={"name": "Default Workspace"})
+        assert create_resp.status_code == 201
+        default_ws_id = create_resp.json()["id"]
+
+        # Attempt public delete
+        del_resp = client.delete(f"/api/workspaces/{default_ws_id}")
+        assert del_resp.status_code == 403
+        assert del_resp.json()["detail"] == "Failed to delete workspace: Default Workspace cannot be deleted"
+
+    def test_delete_default_workspace_internal_allowed(self, client):
+        """Internal delete of Default Workspace should be allowed (no deps present)."""
+        # Create Default Workspace
+        create_resp = client.post("/api/workspaces", json={"name": "Default Workspace"})
+        assert create_resp.status_code == 201
+        default_ws_id = create_resp.json()["id"]
+
+        # Internal delete should succeed
+        del_resp = client.delete(f"/api/internal/workspaces/{default_ws_id}")
+        assert del_resp.status_code == 200
+        assert del_resp.json()["message"] in {"Workspace deleted successfully", "Workspace permanently deleted"}
+
+    def test_internal_purge_handles_dependents(self, client):
+        """Internal purge should delete dependents and workspace without FK errors."""
+        # Create workspace and a MAS dependent
+        ws_resp = client.post("/api/workspaces", json={"name": "Default Workspace"})
+        assert ws_resp.status_code == 201
+        ws_id = ws_resp.json()["id"]
+
+        mas_data = {
+            "name": "WS-Purge Test MAS",
+            "description": "",
+            "agents": {"a1": {"type": "t"}},
+            "config": {},
+        }
+        mas_resp = client.post(f"/api/workspaces/{ws_id}/multi-agentic-systems", json=mas_data)
+        assert mas_resp.status_code == 201
+
+        # Internal purge should succeed and remove workspace and dependents
+        del_resp = client.delete(f"/api/internal/workspaces/{ws_id}?_purge=true")
+        assert del_resp.status_code == 200
+        assert del_resp.json()["message"] == "Workspace permanently deleted"

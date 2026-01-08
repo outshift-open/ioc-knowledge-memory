@@ -23,6 +23,8 @@ from server.database.relational_db.db import RelationalDB
 class WorkspaceService:
     """Service layer for workspace business logic"""
 
+    DEFAULT_WORKSPACE_NAME = "Default Workspace"
+
     def _get_dependency_status(self, session, workspace_id: str):
         """Check if workspace has dependent objects before deletion.
         Returns a tuple: (has_dependents: bool, detail: str)
@@ -72,6 +74,16 @@ class WorkspaceService:
         if kep_count > 0:
             found_parts.append(f"{kep_count} {'knowledge adapter' if kep_count == 1 else 'knowledge adapters'}")
         return True, ", ".join(found_parts)
+
+    def _purge_dependents(self, session, workspace_id: str):
+        """Hard delete all dependent objects for a workspace during internal purge operations"""
+        session.query(ReasonerModel).filter(ReasonerModel.workspace_id == workspace_id).delete(
+            synchronize_session=False
+        )
+        session.query(KnowledgeAdapterModel).filter(KnowledgeAdapterModel.workspace_id == workspace_id).delete(
+            synchronize_session=False
+        )
+        session.query(MASModel).filter(MASModel.workspace_id == workspace_id).delete(synchronize_session=False)
 
     def create_workspace(self, workspace_data: WorkspaceCreate) -> WorkspaceResponse:
         """Create a new workspace"""
@@ -254,8 +266,10 @@ class WorkspaceService:
                 detail=f"Failed to update workspace: {str(e)}",
             )
 
-    def delete_workspace(self, workspace_id: str, _purge: bool = False) -> dict:
-        """Delete a workspace (soft delete by default, hard delete if purge=True)"""
+    def delete_workspace(self, workspace_id: str, _purge: bool = False, allow_default_delete: bool = False) -> dict:
+        """Delete a workspace (soft delete by default, hard delete if purge=True)
+        Blocks deletion of the default workspace.
+        """
         try:
             db = RelationalDB()
             session = db.get_session()
@@ -278,9 +292,16 @@ class WorkspaceService:
                         detail="Workspace not found",
                     )
 
-                # Validate no dependent objects exist before workspace deletion
+                # Block deletion of the Default Workspace in public paths
+                if (not allow_default_delete) and (workspace.name == self.DEFAULT_WORKSPACE_NAME):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Failed to delete workspace: Default Workspace cannot be deleted",
+                    )
+
+                # Validate dependent objects only for soft delete; for purge, hard-delete dependents first
                 has_deps, found_detail = self._get_dependency_status(session, workspace_id)
-                if has_deps:
+                if has_deps and not _purge:
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
                         detail=(
@@ -291,6 +312,8 @@ class WorkspaceService:
                     )
 
                 if _purge:
+                    # Hard delete dependents (including soft-deleted ones) to avoid FK violations
+                    self._purge_dependents(session, workspace_id)
                     session.delete(workspace)
                     message = "Workspace permanently deleted"
                 else:

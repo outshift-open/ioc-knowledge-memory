@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from server.api.endpoints.workspaces import router as workspaces_router
+from server.api.endpoints.workspaces import router as workspaces_router, internal_router as internal_workspaces_router
 from server.api.endpoints.softwares import router as softwares_router
 from server.api.endpoints.tkf import router as tkf_router
 from server.api.endpoints.mas import router as mas_router
@@ -12,6 +12,7 @@ from server.api.endpoints.users import router as users_router
 api_router = APIRouter()
 
 api_router.include_router(workspaces_router, prefix="/workspaces", tags=["workspaces"])
+api_router.include_router(internal_workspaces_router, prefix="/internal/workspaces", tags=["internal-workspaces"])
 api_router.include_router(softwares_router, prefix="/softwares", tags=["softwares"])
 api_router.include_router(mas_router, prefix="/workspaces", tags=["multi-agentic-systems"])
 api_router.include_router(reasoners_router, prefix="/workspaces", tags=["reasoners"])
