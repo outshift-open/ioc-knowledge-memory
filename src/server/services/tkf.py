@@ -1,6 +1,12 @@
 import logging
-from server.schemas.tkf import TkfStoreRequest, TkfStoreResponse
-from server.schemas.tkf import TkfDeleteRequest, TkfDeleteResponse
+from server.schemas.tkf import (
+    TkfStoreRequest,
+    TkfStoreResponse,
+    TkfDeleteRequest,
+    TkfDeleteResponse,
+    TkfQueryRequest,
+    TkfQueryResponse,
+)
 from server.adapters.adapter_graphdb_neo4j import Adapter_GraphDB_Neo4j
 from server.database.graph_db.neo4j.src.db_async import GraphDB
 from server.services.audit import AuditEventType, ResourceType, audit_service, AuditRequest
@@ -132,6 +138,51 @@ class TkfService:
                     audit_extra_information=response.status,
                 )
             )
+            return response
+
+    async def query_tkf_store(self, tkf_query_request: TkfQueryRequest) -> TkfQueryResponse:
+        request_id = tkf_query_request.request_id
+        self.logger.info(f"Querying: {tkf_query_request}")
+
+        try:
+            adapter = Adapter_GraphDB_Neo4j()
+            nodes = adapter.convert_query_to_models(tkf_query_request.dict())
+            self.logger.info(f"Query Nodes: {nodes}")
+
+            db = GraphDB()
+            # Pass the query_criteria Pydantic model directly
+            success, results, msg = await db.query(nodes, query_criteria=tkf_query_request.query_criteria)
+            if success:
+                records = adapter.convert_models_to_query_response_records(results)
+                response = TkfQueryResponse(
+                    request_id=request_id,
+                    status="success",
+                    message=f"{msg}",
+                    records=records,
+                )
+            else:
+                response = TkfQueryResponse(
+                    request_id=request_id,
+                    status="failure",
+                    message=f"{msg}",
+                    records=[],
+                )
+
+            # todo add to audits table
+
+            return response
+
+        except Exception as e:
+            error_msg = f"Failed to query: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            response = TkfQueryResponse(
+                request_id=request_id,
+                status="failure",
+                message=error_msg,
+            )
+
+            # todo add to audits table
+
             return response
 
 

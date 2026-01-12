@@ -46,6 +46,20 @@ class TestNode:
         with pytest.raises(ValueError, match="Invalid property key"):
             Node(id="test_id", labels=["TestLabel"], properties={42: "value"})
 
+    def test_to_cypher_neighbor_query(self):
+        """Test generation of Cypher neighbor query."""
+        # Test with a node with ID
+        node = Node(id="test_id", labels=["TestLabel"])
+        query, params = node.to_cypher_neighbor_query()
+        expected_query = (
+            'MATCH (n { id: "test_id" })\n'
+            "WITH n LIMIT 1\n"
+            "OPTIONAL MATCH (n)-[r]-(m)\n"
+            "RETURN n, collect(DISTINCT r) as relationships, collect(DISTINCT m) as neighbors"
+        )
+        assert query == expected_query
+        assert params == {}
+
     def test_to_cypher_exists(self):
         """Test generation of Cypher EXISTS query."""
         node = Node(id="test_id", labels=["TestLabel"])

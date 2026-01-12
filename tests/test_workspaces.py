@@ -139,7 +139,7 @@ class TestWorkspaceEndpoints:
         assert del_ws_resp_blocked.status_code == 409
         assert "Workspace has dependent objects" in del_ws_resp_blocked.json()["detail"]
 
-        # Delete dependents first 
+        # Delete dependents first
         del_r_resp = client.delete(f"/api/workspaces/{workspace_id}/reasoners/{reasoner_id}")
         assert del_r_resp.status_code == 200
 

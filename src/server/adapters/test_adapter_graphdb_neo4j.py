@@ -44,6 +44,99 @@ class TestAdapterGraphDBNeo4j:
         for edge in edges:
             assert "mas_id" not in edge.properties, "mas_id key should not be in edge properties"
 
+    def test_convert_models_to_query_response_records(self, adapter):
+        """Test convert_models_to_query_response_records with various scenarios."""
+        # Test data with node, relationships, and neighbors
+        test_data = [
+            {
+                "node": {
+                    "id": "1",
+                    "name": "Test Node",
+                    "description": "Test Description",
+                    "embedding_vector": [0.1, 0.2, 0.3],
+                    "embedding_model": "test-model-1",
+                    "custom_attr": "value1",
+                },
+                "relationships": [
+                    {
+                        "id": "r1",
+                        "relation": "RELATED_TO",
+                        "node_ids": ["1", "2"],
+                        "embedding_vector": [0.4, 0.5, 0.6],
+                        "embedding_model": "test-model-2",
+                        "custom_rel_attr": "rel_value1",
+                    }
+                ],
+                "neighbors": [
+                    {"id": "2", "name": "Neighbor Node", "description": "Neighbor Description", "custom_attr": "value2"}
+                ],
+            }
+        ]
+
+        # Call the method
+        result = adapter.convert_models_to_query_response_records(test_data)
+
+        # Verify the result structure
+        assert len(result) == 1
+        record = result[0]
+
+        # Check queried concept
+        assert record.queried_concept is not None
+        assert record.queried_concept.id == "1"
+        assert record.queried_concept.name == "Test Node"
+        assert record.queried_concept.embeddings is not None
+        assert record.queried_concept.embeddings.data == [0.1, 0.2, 0.3]
+        assert record.queried_concept.embeddings.name == "test-model-1"
+        assert record.queried_concept.attributes == {"custom_attr": "value1"}
+
+        # Check relationships
+        assert len(record.relationships) == 1
+        rel = record.relationships[0]
+        assert rel.id == "r1"
+        assert rel.relation == "RELATED_TO"
+        assert rel.embeddings is not None
+        assert rel.embeddings.data == [0.4, 0.5, 0.6]
+        assert rel.embeddings.name == "test-model-2"
+        assert rel.attributes == {"custom_rel_attr": "rel_value1"}
+
+        # Check neighbors
+        assert len(record.concepts) == 1
+        neighbor = record.concepts[0]
+        assert neighbor.id == "2"
+        assert neighbor.name == "Neighbor Node"
+        assert neighbor.embeddings is None  # No embeddings provided for neighbor
+        assert neighbor.attributes == {"custom_attr": "value2"}
+
+    def test_convert_models_to_query_response_records_empty_embeddings(self, adapter):
+        """Test convert_models_to_query_response_records with nodes without embeddings."""
+        test_data = [
+            {
+                "node": {"id": "1", "name": "Test Node", "description": "Test Description", "custom_attr": "value1"},
+                "relationships": [
+                    {"id": "r1", "relation": "RELATED_TO", "node_ids": ["1", "2"], "custom_rel_attr": "rel_value1"}
+                ],
+                "neighbors": [],
+            }
+        ]
+
+        result = adapter.convert_models_to_query_response_records(test_data)
+        record = result[0]
+
+        # Check that embeddings is None when not provided
+        assert record.queried_concept.embeddings is None
+        assert record.relationships[0].embeddings is None
+
+    def test_convert_models_to_query_response_records_empty_input(self, adapter):
+        """Test convert_models_to_query_response_records with empty input."""
+        result = adapter.convert_models_to_query_response_records([])
+        assert result == []
+
+    def test_convert_models_to_query_response_records_missing_node(self, adapter):
+        """Test convert_models_to_query_response_records with missing node data."""
+        test_data = [{"relationships": [], "neighbors": []}]
+        result = adapter.convert_models_to_query_response_records(test_data)
+        assert result[0].queried_concept is None
+
     def test_convert_to_models_with_concepts(self, adapter):
         """Test convert_to_models with concept data."""
         test_data = {
@@ -170,7 +263,7 @@ class TestAdapterGraphDBNeo4j:
         assert len(edges) == 1
         edge = edges[0]
         # Should only have node_ids and metadata in properties
-        assert set(edge.properties.keys()) == {"node_ids", "mas_id", "wksp_id", "memory_type"}
+        assert set(edge.properties.keys()) == {"node_ids", "mas_id", "wksp_id", "memory_type", "relation"}
 
     def test_convert_to_models_with_concepts_no_tags(self, adapter):
         """Test convert_to_models with concept data that has no tags."""
@@ -223,7 +316,7 @@ class TestAdapterGraphDBNeo4j:
         node = nodes[0]
 
         # Should have default properties and embeddings, but no additional attributes
-        assert set(node.properties.keys()) == {"name", "description", "embedding_vector", "embedding_model"}
+        assert set(node.properties.keys()) == {"name", "description", "embedding_vector", "embedding_model", "mas_id"}
 
     def test_convert_to_models_with_concepts_no_embeddings(self, adapter):
         """Test convert_to_models with concept data that has no embeddings."""

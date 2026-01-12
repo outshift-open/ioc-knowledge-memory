@@ -121,6 +121,40 @@ class Node:
         query = "MATCH (n {id: $id}) DETACH DELETE n"
         return query, params
 
+    def to_cypher_neighbor_query(self) -> tuple[str, dict]:
+        """Generate a Cypher query to find nodes matching the criteria along with their
+        immediate relationships and neighbor nodes, with a limit on the number of matched nodes.
+
+        Args:
+            node_match_limit: Maximum number of nodes to match (default: 1)
+
+        The query will return for each matched node:
+        - The node (as 'n')
+        - All relationships from/to this node (as 'r')
+        - All connected neighbor nodes (as 'm')
+
+        Returns:
+
+        Raises:
+            ValueError: Node must have an ID for neighbor queries
+        """
+        alias = "n"
+        # Only match by ID, ignore labels and other properties
+        if not hasattr(self, "id") or self.id is None:
+            raise ValueError("Node must have an ID for neighbor queries")
+
+        # Match only by ID
+        props = f'id: "{self.id}"'
+
+        node_match_cnt = 1  # since we are only matching by ID
+        query = (
+            f"MATCH ({alias} {{ {props} }})"
+            f"\nWITH {alias} LIMIT {node_match_cnt}"
+            f"\nOPTIONAL MATCH ({alias})-[r]-(m)"
+            f"\nRETURN {alias}, collect(DISTINCT r) as relationships, collect(DISTINCT m) as neighbors"
+        )
+        return query, {}
+
     def to_executable_cypher(self, query: str, params: dict) -> str:
         """Generate an executable Cypher query with parameters inlined.
 

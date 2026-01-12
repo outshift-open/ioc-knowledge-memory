@@ -3,10 +3,12 @@ import logging
 import time
 from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
+from server.schemas.tkf import QUERY_TYPE_NEIGHBOUR
 from neo4j import AsyncGraphDatabase, AsyncDriver
 from neo4j.exceptions import ServiceUnavailable, AuthError
 from server.database.graph_db.neo4j.models.node import Node
 from server.database.graph_db.neo4j.models.edge import Edge
+from server.schemas.tkf import QueryCriteria
 
 # Used when environment variables are not configured
 NEO4J_DATABASE_DEFAULT = "tkf"
@@ -177,11 +179,7 @@ class GraphDB:
                 record = await result.single()
                 if record:
                     node_data = record["n"]
-                    self.logger.debug(
-                        f"Found existing node - ID: {node.id}, "
-                        f"Labels: {node_data.labels}, "
-                        f"Properties: {node_data.properties}"
-                    )
+                    self.logger.debug(f"Found existing node - ID: {node.id}, ")
                     return True, node_data
 
             return False, None
@@ -210,11 +208,7 @@ class GraphDB:
                 record = await result.single()
                 if record:
                     edge_data = record["r"]
-                    self.logger.debug(
-                        f"Found existing edge - ID: {edge.id}, "
-                        f"Type: {edge.relation}, "
-                        f"Properties: {edge_data.properties}"
-                    )
+                    self.logger.debug(f"Found existing edge - ID: {edge.id}, ")
                     return True, edge_data
 
             return False, None
@@ -415,3 +409,95 @@ class GraphDB:
     def is_connected(self) -> bool:
         """Check if the driver is initialized and connected."""
         return self._driver is not None
+
+    async def query(self, nodes, query_criteria: QueryCriteria) -> tuple[bool, list, str]:
+        """
+        Query the graph database.
+        If query_type="neighbor", query for neighbors of the given nodes.
+
+        Args:
+            nodes: List of Node objects to be used for querying
+            query_criteria: Dictionary containing the query criteria
+
+        Returns:
+            Tuple containing (success: bool, results: list, msg: str) where:
+                - success: Boolean indicating if the operation was successful
+                - results: List of query results (empty if error)
+                - msg: Status or error message
+
+        Raises:
+            ValueError: If input validation fails
+        """
+        # Ensure nodes is a list (not a tuple containing a list)
+        if isinstance(nodes, tuple) and len(nodes) == 1 and isinstance(nodes[0], list):
+            nodes = nodes[0]
+        elif not isinstance(nodes, list):
+            nodes = [nodes]  # Convert single node to list for consistent processing
+
+        query_type = query_criteria.query_type.lower()
+        results = []
+
+        try:
+            if query_type == QUERY_TYPE_NEIGHBOUR:
+                # First, check if all nodes exist
+                missing_nodes = []
+                for node in nodes:
+                    if not hasattr(node, "id") or not node.id:
+                        raise ValueError("All nodes must have an ID for querying")
+
+                    exists, _ = await self.node_exists(node)
+                    if not exists:
+                        missing_nodes.append(node.id)
+
+                if missing_nodes:
+                    return False, [], f"Nodes not found: {', '.join(missing_nodes)}"
+
+                for node in nodes:
+                    try:
+                        query, params = node.to_cypher_neighbor_query()
+                        self.logger.info(f"Executing neighbor query: {node.to_executable_cypher(query, params)}")
+
+                        # Execute the query
+                        async with self.get_session() as session:
+                            result = await session.run(query, **params)
+                            record = await result.single()
+
+                            if not record:
+                                self.logger.warning(f"No results found for node {node.id}")
+                                results.append({"node": {"id": node.id}, "relationships": [], "neighbors": []})
+                                continue
+
+                            # Extract the node, relationships, and neighbors
+                            node_data = dict(record[0])  # The main node
+                            relationships = [dict(rel) for rel in record[1]]  # All relationships
+                            neighbors = [dict(n) for n in record[2]]  # All neighbor nodes
+
+                            results.append({"node": node_data, "relationships": relationships, "neighbors": neighbors})
+                    except Exception as e:
+                        self.logger.error(f"Error querying node {getattr(node, 'id', 'unknown')}: {str(e)}")
+                        results.append(
+                            {
+                                "node": {"id": getattr(node, "id", "unknown")},
+                                "error": str(e),
+                                "relationships": [],
+                                "neighbors": [],
+                            }
+                        )
+
+                success_count = len([r for r in results if "error" not in r])
+                failed_nodes = [r["node"]["id"] for r in results if "error" in r]
+
+                msg = f"Successfully queried neighbours for {success_count} of {len(nodes)} nodes"
+                if failed_nodes:
+                    msg += f" (failed nodes: {', '.join(map(str, failed_nodes))})"
+
+                return True, results, msg
+
+            else:
+                error_msg = f"Unsupported query type: {query_type}"
+                self.logger.error(error_msg)
+
+        except Exception as e:
+            error_msg = f"Error in query operation: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            raise  # Re-raise the exception

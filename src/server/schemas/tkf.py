@@ -52,8 +52,8 @@ class TkfStoreRequest(BaseModel):
         request_id: Optional UUID for request tracking
         records: Dictionary containing concepts and relations
         memory_type: Type of memory (Semantic, Procedural, or Episodic)
-        mas_id: Mandatory ID for the MAS (Multi-Agent System)
-        tags: List[str] = Field(default_factory=list,description="Optional list of tags for categorization")
+        mas_id: ID for the MAS (Multi-Agent System)
+        wksp_id: ID for the Workspace
     """
 
     request_id: str = Field(
@@ -64,7 +64,6 @@ class TkfStoreRequest(BaseModel):
     )
 
     memory_type: Literal["Semantic", "Procedural", "Episodic"] = Field(..., description="Type of memory being stored")
-    # mas_id: str = Field(..., min_length=1, description="Mandatory ID for the Multi-Agent System")
     mas_id: Optional[str] = Field(
         default=None, min_length=1, description="ID for the Multi-Agent System (Not required for Global Knowledge)"
     )
@@ -180,7 +179,6 @@ class TkfDeleteRequest(BaseModel):
         default_factory=lambda: str(uuid4()), description="Auto-generated UUID for request tracking"
     )
     records: Dict[Literal["concepts"], Any] = Field(..., description="Dictionary containing 'concepts' keys")
-    # mas_id: str = Field(..., description="The MAS ID for the request")
     mas_id: Optional[str] = Field(
         default=None, min_length=1, description="ID for the Multi-Agent System (Not required for Global Knowledge)"
     )
@@ -218,3 +216,68 @@ class TkfDeleteResponse(BaseModel):
     request_id: str = Field(..., description="UUID for request tracking")
     status: Literal["success", "failure"] = Field(..., description="Status of the request")
     message: Optional[str] = Field(None, description="Optional message providing additional information")
+
+
+# TKF Query models
+
+QUERY_TYPE_NEIGHBOUR = "neighbour"
+
+
+class QueryCriteria(BaseModel):
+    depth: Optional[int] = Field(default=1, description="Depth of the query (number of hops)")  # Unused
+    limit: Optional[int] = Field(
+        default=None,
+        description="Maximum number of results to return. "  # Unused
+        "Unspecified will return all results",
+    )
+    query_type: str = Field(default=QUERY_TYPE_NEIGHBOUR, description="Type of query to execute")
+
+
+class TkfQueryRequest(BaseModel):
+    """
+    Represents a request to query the TKF store.
+
+    Attributes:
+        request_id: UUID for request tracking
+        records: Dictionary containing 'concepts' keys
+        memory_type: Optional Type of memory (Semantic, Procedural, or Episodic)
+        mas_id: Optional ID for the MAS (Multi-Agent System)
+        wksp_id: Optional ID for the Workspace
+        query_criteria: Query criteria
+    """
+
+    request_id: str = Field(
+        default_factory=lambda: str(uuid4()),
+        description="Auto-generated UUID for request tracking used if not passed in request",
+    )
+    records: Dict[Literal["concepts"], Any] = Field(..., description="Dictionary containing 'concepts' keys")
+    memory_type: Optional[str] = Field(default=None, min_length=1, description="Memory type")
+    mas_id: Optional[str] = Field(default=None, min_length=1, description="ID for the Multi-Agent System")
+    wksp_id: Optional[str] = Field(default=None, min_length=1, description="ID for the Workspace")
+    query_criteria: Optional[QueryCriteria] = Field(
+        default_factory=QueryCriteria,  # This will create a new QueryCriteria with default values
+        description="Query criteria",
+    )
+
+
+class TkfQueryResponseRecord(BaseModel):
+    queried_concept: Optional[Concept] = None
+    # empty if no results
+    relationships: List[Relation] = Field(default_factory=list)
+    concepts: List[Concept] = Field(default_factory=list)
+
+
+class TkfQueryResponse(BaseModel):
+    """
+    Represents a response from the TKF Store after querying knowledge graph data.
+
+    Attributes:
+        request_id: UUID for request tracking
+        status: Status of the request (success or failure)
+        message: Optional message providing additional information
+    """
+
+    request_id: str = Field(..., description="UUID for request tracking")
+    status: Literal["success", "failure"] = Field(..., description="Status of the request")
+    message: Optional[str] = Field(None, description="Optional message providing additional information")
+    records: List[TkfQueryResponseRecord] = Field(default_factory=list)

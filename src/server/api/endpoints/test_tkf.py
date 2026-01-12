@@ -4,7 +4,11 @@ from unittest.mock import AsyncMock, patch
 from fastapi import status
 from fastapi.testclient import TestClient
 from server.api.endpoints.tkf import router
-from server.schemas.tkf import TkfStoreRequest, TkfStoreResponse, TkfDeleteRequest, TkfDeleteResponse
+from server.schemas.tkf import (
+    TkfStoreResponse,
+    TkfDeleteResponse,
+    TkfQueryResponse,
+)
 from fastapi import FastAPI
 
 # Create a test FastAPI app
@@ -151,3 +155,87 @@ class TestTkfEndpoints:
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
         response_data = response.json()
         assert response_data["detail"] is not None
+
+    @pytest.mark.asyncio
+    @patch("server.api.endpoints.tkf.tkf_service.query_tkf_store")
+    async def test_query_tkf_store_success(self, mock_query):
+        """Test successful query of TKF store."""
+        # Setup mock
+        mock_response = TkfQueryResponse(
+            request_id="test-query-id", status="success", message="Successfully queried TKF store", records=[]
+        )
+        mock_query.return_value = mock_response
+
+        # Test query data
+        test_query = {
+            "records": {"concepts": [{"id": "c1"}]},
+            "memory_type": "semantic",
+            "mas_id": "test-mas",
+            "wksp_id": "test-wksp",
+        }
+
+        # Make request
+        response = test_client.post("/query", json=test_query)
+
+        # Verify response
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["status"] == "success"
+        assert response.json()["message"] == "Successfully queried TKF store"
+        assert response.json()["request_id"] == "test-query-id"
+        assert "records" in response.json()
+
+    @pytest.mark.asyncio
+    @patch("server.api.endpoints.tkf.tkf_service.query_tkf_store")
+    async def test_query_tkf_store_minimal_request(self, mock_query):
+        """Test query with minimal required fields."""
+        # Setup mock response
+        mock_response = TkfQueryResponse(
+            request_id="test-query-id", status="success", message="Successfully queried TKF store", records=[]
+        )
+        mock_query.return_value = mock_response
+
+        # Minimal test query data
+        test_query = {"records": {"concepts": [{"id": "c1"}]}}
+
+        # Make request
+        response = test_client.post("/query", json=test_query)
+
+        # Verify response
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["status"] == "success"
+
+    @pytest.mark.asyncio
+    @patch("server.api.endpoints.tkf.tkf_service.query_tkf_store")
+    async def test_query_tkf_store_with_query_criteria(self, mock_query):
+        """Test query with custom query criteria."""
+        # Setup mock response
+        mock_response = TkfQueryResponse(
+            request_id="test-query-id", status="success", message="Successfully queried TKF store", records=[]
+        )
+        mock_query.return_value = mock_response
+
+        # Test query data with query criteria
+        test_query = {
+            "records": {"concepts": [{"id": "c1"}]},
+            "query_criteria": {"depth": 2, "limit": 10, "query_type": "neighbour"},
+        }
+
+        # Make request
+        response = test_client.post("/query", json=test_query)
+
+        # Verify response
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["status"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_query_tkf_store_validation_error(self):
+        """Test validation error for invalid query request."""
+        # Invalid query (missing required 'records' field)
+        test_query = {"memory_type": "semantic"}
+
+        # Make request
+        response = test_client.post("/query", json=test_query)
+
+        # Verify response
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert "field required" in str(response.json()["detail"][0]["msg"]).lower()
