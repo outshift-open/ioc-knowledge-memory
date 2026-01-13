@@ -15,6 +15,7 @@ from server.database.relational_db.models.reasoner import Reasoner as ReasonerMo
 from server.database.relational_db.models.mas import MultiAgenticSystem
 from server.database.relational_db.db import RelationalDB
 from server.services.workspace import workspace_service
+from server.services.audit import AuditEventType, ResourceType, audit_service, AuditRequest
 
 
 class ReasonerService:
@@ -78,10 +79,25 @@ class ReasonerService:
                 session.commit()
                 session.refresh(new_reasoner)
 
-                return ReasonerResponse(
+                response = ReasonerResponse(
                     id=new_reasoner.id,
                     name=new_reasoner.name,
                 )
+
+                # add to audits table
+                audit_service.create_audit(
+                    AuditRequest(
+                        resource_type=ResourceType.REASONER,
+                        audit_type=AuditEventType.RESOURCE_CREATED,
+                        audit_resource_id=new_reasoner.id,
+                        created_by="",  # TODO: get user from apikey
+                        audit_information=reasoner_data.model_dump(),
+                        audit_extra_information="success",
+                        created_at=new_reasoner.created_at,
+                    )
+                )
+
+                return response
 
             except HTTPException:
                 session.rollback()
@@ -235,6 +251,19 @@ class ReasonerService:
                     message = "Reasoner deleted successfully"
 
                 session.commit()
+
+                # add to audits table
+                audit_service.create_audit(
+                    AuditRequest(
+                        resource_type=ResourceType.REASONER,
+                        audit_type=AuditEventType.RESOURCE_DELETED,
+                        audit_resource_id=reasoner_id,
+                        deleted_by="",  # TODO: get user from apikey
+                        audit_information={"purge": _purge},
+                        audit_extra_information=message,
+                        deleted_at=reasoner.deleted_at,
+                    )
+                )
 
                 return {"message": message}
 

@@ -7,6 +7,7 @@ from fastapi import HTTPException, status
 from server.schemas.software import SoftwareList
 from server.database.relational_db.models.software import Software
 from server.database.relational_db.db import RelationalDB
+from server.services.audit import AuditEventType, ResourceType, audit_service, AuditRequest
 
 
 class SoftwareService:

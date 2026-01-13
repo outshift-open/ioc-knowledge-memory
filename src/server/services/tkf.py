@@ -1,4 +1,5 @@
 import logging
+
 from server.schemas.tkf import (
     TkfStoreRequest,
     TkfStoreResponse,
@@ -7,6 +8,8 @@ from server.schemas.tkf import (
     TkfQueryRequest,
     TkfQueryResponse,
 )
+
+from datetime import datetime
 from server.adapters.adapter_graphdb_neo4j import Adapter_GraphDB_Neo4j
 from server.database.graph_db.neo4j.src.db_async import GraphDB
 from server.services.audit import AuditEventType, ResourceType, audit_service, AuditRequest
@@ -25,7 +28,7 @@ class TkfService:
         self.logger.info(f"Creating: {tkf_store_request}")
         try:
             adapter = Adapter_GraphDB_Neo4j()
-            nodes, edges = adapter.convert_to_models(tkf_store_request.dict())
+            nodes, edges = adapter.convert_to_models(tkf_store_request.model_dump())
 
             db = GraphDB()
             save_result, msg = await db.save(nodes=nodes, edges=edges, force_replace=tkf_store_request.force_replace)
@@ -42,15 +45,16 @@ class TkfService:
             # add to audits table
             audit_service.create_audit(
                 AuditRequest(
-                    request_id=request_id,
-                    resource_type=ResourceType.MAS_TKF if tkf_store_request.mas_id else ResourceType.WKSP_TKF,
-                    audit_type=AuditEventType.CREATE_TKF,
+                    operation_id=request_id,
+                    resource_type=ResourceType.MAS,
+                    audit_type=AuditEventType.RESOURCE_CREATED,
                     audit_resource_id=tkf_store_request.mas_id
                     if tkf_store_request.mas_id
                     else tkf_store_request.wksp_id,
                     created_by="",  # TODO: get user from apikey
-                    audit_information=tkf_store_request.dict(),
+                    audit_information=tkf_store_request.model_dump(),
                     audit_extra_information=response.status,
+                    created_at=datetime.utcnow(),
                 )
             )
 
@@ -62,15 +66,16 @@ class TkfService:
             # add to audits table
             audit_service.create_audit(
                 AuditRequest(
-                    request_id=request_id,
-                    resource_type=ResourceType.MAS_TKF if tkf_store_request.mas_id else ResourceType.WKSP_TKF,
-                    audit_type=AuditEventType.CREATE_TKF,
+                    operation_id=request_id,
+                    resource_type=ResourceType.MAS,
+                    audit_type=AuditEventType.RESOURCE_CREATED,
                     audit_resource_id=tkf_store_request.mas_id
                     if tkf_store_request.mas_id
                     else tkf_store_request.wksp_id,
                     created_by="",  # TODO: get user from apikey
-                    audit_information=tkf_store_request.dict(),
+                    audit_information=tkf_store_request.model_dump(),
                     audit_extra_information=response.status,
+                    created_at=datetime.utcnow(),
                 )
             )
             return response
@@ -81,7 +86,7 @@ class TkfService:
         self.logger.info(f"Deleting: {tkf_delete_request}")
         try:
             adapter = Adapter_GraphDB_Neo4j()
-            nodes, edges = adapter.convert_to_models(tkf_delete_request.dict())
+            nodes, edges = adapter.convert_to_models(tkf_delete_request.model_dump())
 
             db = GraphDB()
             delete_result, msg = await db.delete(nodes=nodes)
@@ -102,15 +107,14 @@ class TkfService:
             # add to audits table
             audit_service.create_audit(
                 AuditRequest(
-                    request_id=request_id,
-                    resource_type=ResourceType.MAS_TKF if tkf_delete_request.mas_id else ResourceType.WKSP_TKF,
-                    audit_type=AuditEventType.DELETE_TKF,
+                    operation_id=request_id,
+                    resource_type=ResourceType.MAS,
+                    audit_type=AuditEventType.RESOURCE_DELETED,
                     audit_resource_id=tkf_delete_request.mas_id
                     if tkf_delete_request.mas_id
                     else tkf_delete_request.wksp_id,
                     deleted_by="",  # TODO: get user from apikey
-                    audit_information=tkf_delete_request.dict(),
-                    audit_extra_information=response.status,
+                    deleted_at=datetime.utcnow(),
                 )
             )
 
@@ -127,15 +131,16 @@ class TkfService:
             # add to audits table
             audit_service.create_audit(
                 AuditRequest(
-                    request_id=request_id,
-                    resource_type=ResourceType.MAS_TKF if tkf_delete_request.mas_id else ResourceType.WKSP_TKF,
-                    audit_type=AuditEventType.DELETE_TKF,
+                    operation_id=request_id,
+                    resource_type=ResourceType.MAS,
+                    audit_type=AuditEventType.RESOURCE_DELETED,
                     audit_resource_id=tkf_delete_request.mas_id
                     if tkf_delete_request.mas_id
                     else tkf_delete_request.wksp_id,
                     deleted_by="",  # TODO: get user from apikey
-                    audit_information=tkf_delete_request.dict(),
+                    audit_information=tkf_delete_request.model_dump(),
                     audit_extra_information=response.status,
+                    deleted_at=datetime.utcnow(),
                 )
             )
             return response

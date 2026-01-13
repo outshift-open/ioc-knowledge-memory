@@ -60,8 +60,8 @@ class Edge:
         Returns:
             tuple: (cypher_query, parameters_dict) containing the relationship ID
         """
-        query = f"""
-        MATCH ()-[r {{id: $id}}]-()
+        query = """
+        MATCH ()-[r {id: $id}]-()
         RETURN r
         LIMIT 1
         """

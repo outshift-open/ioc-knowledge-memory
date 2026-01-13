@@ -7,6 +7,7 @@ from server.api.endpoints.mas import router as mas_router
 from server.api.endpoints.reasoners import router as reasoners_router
 from server.api.endpoints.knowledge_adapters import router as kep_router
 from server.api.endpoints.users import router as users_router
+from server.api.endpoints.audit import router as audits_router
 
 
 api_router = APIRouter()
@@ -19,3 +20,4 @@ api_router.include_router(reasoners_router, prefix="/workspaces", tags=["reasone
 api_router.include_router(kep_router, prefix="/workspaces", tags=["knowledge-adapters"])
 api_router.include_router(users_router, prefix="/users", tags=["users"])
 api_router.include_router(tkf_router, prefix="/tkf", tags=["tkf"])
+api_router.include_router(audits_router, prefix="/audits", tags=["audits"])

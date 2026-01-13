@@ -14,6 +14,7 @@ from server.schemas.multi_agentic_system import (
 from server.database.relational_db.models.mas import MultiAgenticSystem as MultiAgenticSystemModel
 from server.database.relational_db.db import RelationalDB
 from server.services.workspace import workspace_service
+from server.services.audit import AuditEventType, ResourceType, audit_service, AuditRequest
 
 
 class MultiAgenticSystemService:
@@ -62,10 +63,25 @@ class MultiAgenticSystemService:
                 session.commit()
                 session.refresh(new_mas)
 
-                return MultiAgenticSystemResponse(
+                response = MultiAgenticSystemResponse(
                     id=new_mas.id,
                     name=new_mas.name,
                 )
+
+                # add to audits table
+                audit_service.create_audit(
+                    AuditRequest(
+                        resource_type=ResourceType.MAS,
+                        audit_type=AuditEventType.RESOURCE_CREATED,
+                        audit_resource_id=new_mas.id,
+                        created_by="",  # TODO: get user from apikey
+                        audit_information=mas_data.model_dump(),
+                        audit_extra_information="success",
+                        created_at=new_mas.created_at,
+                    )
+                )
+
+                return response
 
             except IntegrityError as e:
                 session.rollback()
@@ -225,6 +241,19 @@ class MultiAgenticSystemService:
                     message = "Multi-agentic system deleted successfully"
 
                 session.commit()
+
+                # add to audits table
+                audit_service.create_audit(
+                    AuditRequest(
+                        resource_type=ResourceType.MAS,
+                        audit_type=AuditEventType.RESOURCE_DELETED,
+                        audit_resource_id=mas_id,
+                        deleted_by="",  # TODO: get user from apikey
+                        audit_information={"purge": _purge},
+                        audit_extra_information=message,
+                        deleted_at=mas.deleted_at,
+                    )
+                )
 
                 return {"message": message}
 

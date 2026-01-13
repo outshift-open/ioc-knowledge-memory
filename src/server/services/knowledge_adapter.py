@@ -16,6 +16,7 @@ from server.database.relational_db.models.mas import MultiAgenticSystem
 from server.database.relational_db.models.software import Software
 from server.database.relational_db.db import RelationalDB
 from server.services.workspace import workspace_service
+from server.services.audit import AuditEventType, ResourceType, audit_service, AuditRequest
 
 
 class KnowledgeAdapterService:
@@ -109,10 +110,25 @@ class KnowledgeAdapterService:
                 session.commit()
                 session.refresh(new_kep)
 
-                return KnowledgeAdapterResponse(
+                response = KnowledgeAdapterResponse(
                     id=new_kep.id,
                     name=new_kep.name,
                 )
+
+                # add to audits table
+                audit_service.create_audit(
+                    AuditRequest(
+                        resource_type=ResourceType.EXTERNAL_KNOWLEDGE,
+                        audit_type=AuditEventType.RESOURCE_CREATED,
+                        audit_resource_id=new_kep.id,
+                        created_by="",  # TODO: get user from apikey
+                        audit_information=kep_data.model_dump(),
+                        audit_extra_information="success",
+                        created_at=new_kep.created_at,
+                    )
+                )
+
+                return response
 
             except HTTPException:
                 session.rollback()
@@ -275,6 +291,19 @@ class KnowledgeAdapterService:
                     message = "Knowledge adapter deleted successfully"
 
                 session.commit()
+
+                # add to audits table
+                audit_service.create_audit(
+                    AuditRequest(
+                        resource_type=ResourceType.EXTERNAL_KNOWLEDGE,
+                        audit_type=AuditEventType.RESOURCE_DELETED,
+                        audit_resource_id=kep_id,
+                        deleted_by="",  # TODO: get user from apikey
+                        deleted_at=kep.deleted_at,
+                        audit_information={"purge": _purge},
+                        audit_extra_information=message,
+                    )
+                )
 
                 return {"message": message}
 

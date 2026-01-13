@@ -18,6 +18,7 @@ from server.database.relational_db.models.mas import MultiAgenticSystem as MASMo
 from server.database.relational_db.models.reasoner import Reasoner as ReasonerModel
 from server.database.relational_db.models.knowledge_adapter import KnowledgeAdapter as KnowledgeAdapterModel
 from server.database.relational_db.db import RelationalDB
+from server.services.audit import AuditEventType, ResourceType, audit_service, AuditRequest
 
 
 class WorkspaceService:
@@ -117,7 +118,22 @@ class WorkspaceService:
                 session.commit()
                 session.refresh(new_workspace)
 
-                return WorkspaceResponse(id=new_workspace.id)
+                response = WorkspaceResponse(id=new_workspace.id)  # type: ignore[arg-type]
+
+                # add to audits table
+                audit_service.create_audit(
+                    AuditRequest(
+                        resource_type=ResourceType.WORKSPACE,
+                        audit_type=AuditEventType.RESOURCE_CREATED,
+                        audit_resource_id=new_workspace.id,  # type: ignore[arg-type]
+                        created_by="",  # TODO: get user from apikey
+                        created_at=new_workspace.created_at,  # type: ignore[arg-type]
+                        audit_information=workspace_data.model_dump(),
+                        audit_extra_information="Workspace created successfully",
+                    )
+                )
+
+                return response
 
             finally:
                 session.close()
@@ -146,11 +162,11 @@ class WorkspaceService:
 
                 workspace_details = [
                     WorkspaceDetail(
-                        id=workspace.id,
-                        name=workspace.name,
-                        created_at=workspace.created_at,
-                        users=workspace.users or [],
-                        config=workspace.config,
+                        id=workspace.id,  # type: ignore[arg-type]
+                        name=workspace.name,  # type: ignore[arg-type]
+                        created_at=workspace.created_at,  # type: ignore[arg-type]
+                        users=workspace.users or [],  # type: ignore[arg-type]
+                        config=workspace.config,  # type: ignore[arg-type]
                     )
                     for workspace in workspaces
                 ]
@@ -191,11 +207,11 @@ class WorkspaceService:
                     )
 
                 return WorkspaceDetail(
-                    id=workspace.id,
-                    name=workspace.name,
-                    created_at=workspace.created_at,
-                    users=workspace.users or [],
-                    config=workspace.config,
+                    id=workspace.id,  # type: ignore[arg-type]
+                    name=workspace.name,  # type: ignore[arg-type]
+                    created_at=workspace.created_at,  # type: ignore[arg-type]
+                    users=workspace.users or [],  # type: ignore[arg-type]
+                    config=workspace.config,  # type: ignore[arg-type]
                 )
 
             finally:
@@ -235,20 +251,36 @@ class WorkspaceService:
 
                 # Update only provided fields
                 if workspace_data.name is not None:
-                    workspace.name = workspace_data.name
+                    workspace.name = workspace_data.name  # type: ignore[assignment]
 
-                workspace.updated_at = datetime.now(timezone.utc)
+                workspace.updated_at = datetime.now(timezone.utc)  # type: ignore[assignment]
 
                 session.commit()
                 session.refresh(workspace)
 
-                return WorkspaceDetail(
-                    id=workspace.id,
-                    name=workspace.name,
-                    created_at=workspace.created_at,
-                    users=workspace.users or [],
-                    config=workspace.config,
+                response = WorkspaceDetail(
+                    id=workspace.id,  # type: ignore[arg-type]
+                    name=workspace.name,  # type: ignore[arg-type]
+                    created_at=workspace.created_at,  # type: ignore[arg-type]
+                    updated_at=workspace.updated_at,  # type: ignore[arg-type]
+                    users=workspace.users or [],  # type: ignore[arg-type]
+                    config=workspace.config,  # type: ignore[arg-type]
                 )
+
+                # add to audits table
+                audit_service.create_audit(
+                    AuditRequest(
+                        resource_type=ResourceType.WORKSPACE,
+                        audit_type=AuditEventType.RESOURCE_UPDATED,
+                        audit_resource_id=workspace_id,
+                        updated_by="",  # TODO: get user from apikey
+                        updated_at=workspace.updated_at,  # type: ignore[arg-type]
+                        audit_information=workspace_data.model_dump(),
+                        audit_extra_information="success",
+                    )
+                )
+
+                return response
 
             finally:
                 session.close()
@@ -317,10 +349,23 @@ class WorkspaceService:
                     session.delete(workspace)
                     message = "Workspace permanently deleted"
                 else:
-                    workspace.deleted_at = datetime.now(timezone.utc)
+                    workspace.deleted_at = datetime.now(timezone.utc)  # type: ignore[assignment]
                     message = "Workspace deleted successfully"
 
                 session.commit()
+
+                # add to audits table
+                audit_service.create_audit(
+                    AuditRequest(
+                        resource_type=ResourceType.WORKSPACE,
+                        audit_type=AuditEventType.RESOURCE_DELETED,
+                        audit_resource_id=workspace_id,
+                        deleted_by="",  # TODO: get user from apikey
+                        deleted_at=workspace.deleted_at,  # type: ignore[arg-type]
+                        audit_information={"purge": _purge},
+                        audit_extra_information=message,
+                    )
+                )
 
                 return {"message": message}
 

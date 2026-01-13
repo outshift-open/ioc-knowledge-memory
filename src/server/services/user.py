@@ -3,6 +3,7 @@
 import logging
 import uuid
 import os
+from datetime import datetime
 
 from fastapi import HTTPException, status
 
@@ -10,6 +11,7 @@ from server.schemas.user import UserResponse, User, Users
 from server.database.relational_db.models.user import User as UserModel
 from server.database.relational_db.db import RelationalDB
 from server.common import get_global_encryption_key, encrypt_data
+from server.services.audit import AuditEventType, ResourceType, audit_service, AuditRequest
 
 # Get logger instance (logging is setup in main.py)
 logger = logging.getLogger(__name__)
@@ -81,7 +83,26 @@ class UserService:
                     f"with ID: {user_id}"
                 )
 
-                return UserResponse(id=user_id)
+                response = UserResponse(id=user_id)
+
+                # add to audits table
+                audit_service.create_audit(
+                    AuditRequest(
+                        resource_type=ResourceType.USER,
+                        audit_type=AuditEventType.RESOURCE_CREATED,
+                        audit_resource_id=user_id,
+                        created_by="",  # TODO: get user from apikey
+                        audit_information={
+                            "username": ADMIN_USER_USERNAME_DEFAULT,
+                            "domain": ADMIN_USER_DOMAIN_DEFAULT,
+                            "role": ADMIN_USER_ROLE_DEFAULT,
+                        },
+                        audit_extra_information="success",
+                        created_at=datetime.utcnow(),
+                    )
+                )
+
+                return response
 
             except Exception as e:
                 session.rollback()
