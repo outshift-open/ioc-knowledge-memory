@@ -5,6 +5,9 @@ from server.schemas.reasoner import (
     ReasonerResponse,
     Reasoner,
     Reasoners,
+    QueryRequest,
+    QueryResponse,
+    QueryHistory,
 )
 from server.services import reasoner_service
 
@@ -79,3 +82,45 @@ def delete_reasoner(workspace_id: str, reasoner_id: str, _purge: bool = False):
     Returns success message
     """
     return reasoner_service.delete_reasoner(workspace_id, reasoner_id, _purge)
+
+
+@router.post(
+    "/{workspace_id}/reasoners/{reasoner_id}/query_history",
+    response_model=QueryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def store_reasoner_query(
+    workspace_id: str,
+    reasoner_id: str,
+    query_data: QueryRequest,
+):
+    """
+    Store a reasoner query response as backup history
+
+    - **workspace_id**: UUID of the workspace
+    - **reasoner_id**: UUID of the reasoner
+    - **reasoner_cognition_response_id**: ID of the reasoner cognition response
+    - **status**: Status of the query execution
+    - **reasoner_cognition_request_id**: ID of the reasoner cognition request
+    - **records**: Query result records
+    - **meta**: Metadata about the query
+
+    Returns the stored query information
+    """
+    return reasoner_service.store_query(workspace_id, reasoner_id, query_data.model_dump())
+
+
+@router.get(
+    "/{workspace_id}/reasoners/{reasoner_id}/query_history",
+    response_model=QueryHistory,
+)
+def get_reasoner_query_history(workspace_id: str, reasoner_id: str):
+    """
+    Get the reasoner query history
+
+    - **workspace_id**: UUID of the workspace
+    - **reasoner_id**: UUID of the reasoner
+
+    Returns the reasoner query history
+    """
+    return reasoner_service.get_query_history(workspace_id, reasoner_id)

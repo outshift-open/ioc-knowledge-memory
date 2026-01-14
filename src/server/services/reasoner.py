@@ -10,8 +10,12 @@ from server.schemas.reasoner import (
     ReasonerResponse,
     Reasoner as ReasonerSchema,
     Reasoners,
+    QueryResponse,
+    QueryHistory,
+    QueryHistoryItem,
 )
 from server.database.relational_db.models.reasoner import Reasoner as ReasonerModel
+from server.database.relational_db.models.reasoner_query import ReasonerHistory
 from server.database.relational_db.models.mas import MultiAgenticSystem
 from server.database.relational_db.db import RelationalDB
 from server.services.workspace import workspace_service
@@ -276,6 +280,161 @@ class ReasonerService:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to delete reasoner: {str(e)}",
+            )
+
+    def store_query(self, workspace_id: str, reasoner_id: str, query_data: dict) -> QueryResponse:
+        """Store a query response as backup history"""
+        # Validate workspace exists
+        if not workspace_service.workspace_exists(workspace_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workspace not found",
+            )
+
+        try:
+            db = RelationalDB()
+            session = db.get_session()
+
+            try:
+                # Verify reasoner exists in the workspace
+                reasoner = (
+                    session.query(ReasonerModel)
+                    .filter(
+                        ReasonerModel.id == reasoner_id,
+                        ReasonerModel.workspace_id == workspace_id,
+                        ReasonerModel.deleted_at.is_(None),
+                    )
+                    .first()
+                )
+
+                if not reasoner:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Reasoner with id '{reasoner_id}' not found in this workspace",
+                    )
+
+                # Create query record
+                query_record = ReasonerHistory(
+                    workspace_id=workspace_id,
+                    reasoner_id=reasoner_id,
+                    request_id=query_data.get("reasoner_cognition_request_id"),
+                    response_id=query_data.get("reasoner_cognition_response_id"),
+                    response_data=query_data,
+                    created_by="",  # TODO: get user from apikey
+                )
+
+                session.add(query_record)
+                session.commit()
+                session.refresh(query_record)
+
+                response = QueryResponse(
+                    id=query_record.id,
+                    reasoner_id=reasoner_id,
+                    workspace_id=workspace_id,
+                    created_at=query_record.created_at,
+                )
+
+                # Log audit event
+                audit_service.create_audit(
+                    AuditRequest(
+                        resource_type=ResourceType.REASONER,
+                        audit_type=AuditEventType.REASONING_QUERY,
+                        audit_resource_id=reasoner_id,
+                        created_by="",  # TODO: get user from apikey
+                        audit_information={"response_id": query_data.get("reasoner_cognition_response_id")},
+                        audit_extra_information="query stored",
+                        created_at=query_record.created_at,
+                    )
+                )
+
+                return response
+
+            except HTTPException:
+                session.rollback()
+                raise
+            except Exception as e:
+                session.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to store query: {str(e)}",
+                )
+            finally:
+                session.close()
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to store query: {str(e)}",
+            )
+
+    def get_query_history(self, workspace_id: str, reasoner_id: str) -> QueryHistory:
+        """Retrieve query history for a reasoner"""
+        # Validate workspace exists
+        if not workspace_service.workspace_exists(workspace_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workspace not found",
+            )
+
+        try:
+            db = RelationalDB()
+            session = db.get_session()
+
+            try:
+                # Verify reasoner exists in the workspace
+                reasoner = (
+                    session.query(ReasonerModel)
+                    .filter(
+                        ReasonerModel.id == reasoner_id,
+                        ReasonerModel.workspace_id == workspace_id,
+                        ReasonerModel.deleted_at.is_(None),
+                    )
+                    .first()
+                )
+
+                if not reasoner:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Reasoner with id '{reasoner_id}' not found in this workspace",
+                    )
+
+                # Retrieve query history
+                query_records = (
+                    session.query(ReasonerHistory)
+                    .filter(
+                        ReasonerHistory.workspace_id == workspace_id,
+                        ReasonerHistory.reasoner_id == reasoner_id,
+                    )
+                    .order_by(ReasonerHistory.created_at.desc())
+                    .all()
+                )
+
+                history_items = [
+                    QueryHistoryItem(
+                        id=record.id,
+                        reasoner_id=record.reasoner_id,
+                        workspace_id=record.workspace_id,
+                        request_id=record.request_id,
+                        response_id=record.response_id,
+                        response_data=record.response_data,
+                        created_at=record.created_at,
+                    )
+                    for record in query_records
+                ]
+
+                return QueryHistory(records=history_items, total=len(history_items))
+
+            finally:
+                session.close()
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to retrieve query history: {str(e)}",
             )
 
 

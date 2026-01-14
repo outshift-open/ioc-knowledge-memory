@@ -70,3 +70,56 @@ class Reasoners(BaseModel):
     """Schema for listing reasoners"""
 
     reasoners: List[Reasoner] = Field(..., description="List of reasoners in the workspace")
+
+
+class QueryRequest(BaseModel):
+    """Schema for storing reasoner query response"""
+
+    reasoner_cognition_response_id: Optional[str] = Field(
+        None,
+        description="ID of the reasoner cognition response",
+    )
+    status: Optional[str] = Field(
+        None,
+        description="Status of the query execution",
+    )
+    reasoner_cognition_request_id: Optional[str] = Field(
+        None,
+        description="ID of the reasoner cognition request",
+    )
+    records: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="Records from the query response",
+    )
+    meta: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Metadata about the query",
+    )
+
+
+class QueryResponse(BaseModel):
+    """Schema for query storage response"""
+
+    id: str = Field(..., description="Unique identifier for the stored query")
+    reasoner_id: str = Field(..., description="ID of the reasoner")
+    workspace_id: str = Field(..., description="ID of the workspace")
+    created_at: datetime = Field(..., description="Timestamp when query was stored")
+
+
+class QueryHistoryItem(BaseModel):
+    """Schema for a single query history item"""
+
+    id: str = Field(..., description="Unique identifier for the stored query")
+    reasoner_id: str = Field(..., description="ID of the reasoner")
+    workspace_id: str = Field(..., description="ID of the workspace")
+    request_id: Optional[str] = Field(None, description="Request ID")
+    response_id: Optional[str] = Field(None, description="Response ID")
+    response_data: Dict[str, Any] = Field(..., description="Complete response data")
+    created_at: datetime = Field(..., description="Timestamp when query was stored")
+
+
+class QueryHistory(BaseModel):
+    """Schema for query history list"""
+
+    records: List[QueryHistoryItem] = Field(..., description="List of query history records")
+    total: int = Field(..., description="Total number of records")
