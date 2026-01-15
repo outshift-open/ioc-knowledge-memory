@@ -1,7 +1,7 @@
 FROM ghcr.io/cisco-eti/sre-python-docker:v3.11.9-hardened-debian-12
 
-# Install curl for health checks and wget for atlas installation
-RUN apt-get update && apt-get install -y curl wget && rm -rf /var/lib/apt/lists/*
+# Install curl for health checks, wget for atlas installation, and postgresql-client for database seeding
+RUN apt-get update && apt-get install -y curl wget postgresql-client && rm -rf /var/lib/apt/lists/*
 
 # Add user app
 RUN useradd -u 1001 app
