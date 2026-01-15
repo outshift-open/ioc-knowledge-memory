@@ -15,6 +15,7 @@ class ReasonerHistory(Base):
     # Query metadata
     request_id = Column(String(255), nullable=True)
     response_id = Column(String(255), nullable=True)
+    query_input = Column(String(2000), nullable=True)
 
     # Query response data (the JSON response from the reasoner)
     response_data = Column(JSONB, nullable=False)

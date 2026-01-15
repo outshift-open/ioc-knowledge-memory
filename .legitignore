@@ -11,3 +11,6 @@ scripts/populate_software.sql
 # Ignore Atlas binary URL
 # Used in Dockerfile to download Atlas CLI
 value_url_https://atlasgo.sh
+
+# Ignore secrets in Taskfile.yaml
+Taskfile.yaml

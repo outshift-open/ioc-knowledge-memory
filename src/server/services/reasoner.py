@@ -11,8 +11,10 @@ from server.schemas.reasoner import (
     Reasoner as ReasonerSchema,
     Reasoners,
     QueryResponse,
-    QueryHistory,
     QueryHistoryItem,
+    QueryEvent,
+    QueryEvents,
+    QueryEventFilter,
 )
 from server.database.relational_db.models.reasoner import Reasoner as ReasonerModel
 from server.database.relational_db.models.reasoner_query import ReasonerHistory
@@ -282,7 +284,7 @@ class ReasonerService:
                 detail=f"Failed to delete reasoner: {str(e)}",
             )
 
-    def store_query(self, workspace_id: str, reasoner_id: str, query_data: dict) -> QueryResponse:
+    def store_reasoner_event(self, workspace_id: str, reasoner_id: str, query_data: dict) -> QueryResponse:
         """Store a query response as backup history"""
         # Validate workspace exists
         if not workspace_service.workspace_exists(workspace_id):
@@ -314,11 +316,17 @@ class ReasonerService:
                     )
 
                 # Create query record
+                query_input_value = query_data.get("query_input")
+                # Convert empty string to None for NULL in database
+                if query_input_value == "":
+                    query_input_value = None
+
                 query_record = ReasonerHistory(
                     workspace_id=workspace_id,
                     reasoner_id=reasoner_id,
                     request_id=query_data.get("reasoner_cognition_request_id"),
                     response_id=query_data.get("reasoner_cognition_response_id"),
+                    query_input=query_input_value,
                     response_data=query_data,
                     created_by="",  # TODO: get user from apikey
                 )
@@ -369,8 +377,10 @@ class ReasonerService:
                 detail=f"Failed to store query: {str(e)}",
             )
 
-    def get_query_history(self, workspace_id: str, reasoner_id: str) -> QueryHistory:
-        """Retrieve query history for a reasoner"""
+    def list_and_filter_reasoner_events(
+        self, workspace_id: str, reasoner_id: str = None, filters: QueryEventFilter = None
+    ) -> QueryEvents:
+        """Retrieve query events with optional filters. Can query all reasoners or a specific reasoner"""
         # Validate workspace exists
         if not workspace_service.workspace_exists(workspace_id):
             raise HTTPException(
@@ -383,48 +393,55 @@ class ReasonerService:
             session = db.get_session()
 
             try:
-                # Verify reasoner exists in the workspace
-                reasoner = (
-                    session.query(ReasonerModel)
-                    .filter(
-                        ReasonerModel.id == reasoner_id,
-                        ReasonerModel.workspace_id == workspace_id,
-                        ReasonerModel.deleted_at.is_(None),
-                    )
-                    .first()
-                )
+                # Normalize reasoner_id: treat empty string as None
+                reasoner_id = reasoner_id if reasoner_id else None
 
-                if not reasoner:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Reasoner with id '{reasoner_id}' not found in this workspace",
-                    )
+                # Build query with filters
+                query = session.query(ReasonerHistory).filter(ReasonerHistory.workspace_id == workspace_id)
 
-                # Retrieve query history
-                query_records = (
-                    session.query(ReasonerHistory)
-                    .filter(
-                        ReasonerHistory.workspace_id == workspace_id,
-                        ReasonerHistory.reasoner_id == reasoner_id,
-                    )
-                    .order_by(ReasonerHistory.created_at.desc())
-                    .all()
-                )
+                # Apply reasoner_id filter if provided (either from parameter or filters)
+                if reasoner_id:
+                    query = query.filter(ReasonerHistory.reasoner_id == reasoner_id)
+                elif filters and filters.reasoner_id:
+                    query = query.filter(ReasonerHistory.reasoner_id == filters.reasoner_id)
 
-                history_items = [
-                    QueryHistoryItem(
-                        id=record.id,
-                        reasoner_id=record.reasoner_id,
-                        workspace_id=record.workspace_id,
+                # Apply optional filters
+                if filters:
+                    if filters.request_id:
+                        query = query.filter(ReasonerHistory.request_id == filters.request_id)
+                    if filters.response_id:
+                        query = query.filter(ReasonerHistory.response_id == filters.response_id)
+                    if filters.created_by:
+                        query = query.filter(ReasonerHistory.created_by == filters.created_by)
+                    if filters.start_date:
+                        query = query.filter(ReasonerHistory.created_at >= filters.start_date)
+                    if filters.end_date:
+                        query = query.filter(ReasonerHistory.created_at <= filters.end_date)
+
+                # Get total count before pagination
+                total = query.count()
+
+                # Apply ordering and pagination
+                offset = filters.offset if filters and filters.offset else 0
+                limit = filters.limit if filters and filters.limit else 100
+
+                query_records = query.order_by(ReasonerHistory.created_at.desc()).offset(offset).limit(limit).all()
+
+                events = [
+                    QueryEvent(
+                        id=str(record.id),
+                        reasoner_id=str(record.reasoner_id),
+                        workspace_id=str(record.workspace_id),
                         request_id=record.request_id,
                         response_id=record.response_id,
-                        response_data=record.response_data,
                         created_at=record.created_at,
+                        created_by=record.created_by,
+                        query_input=record.query_input,
                     )
                     for record in query_records
                 ]
 
-                return QueryHistory(records=history_items, total=len(history_items))
+                return QueryEvents(records=events, total=total)
 
             finally:
                 session.close()
@@ -434,7 +451,58 @@ class ReasonerService:
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve query history: {str(e)}",
+                detail=f"Failed to retrieve query events: {str(e)}",
+            )
+
+    def get_reasoner_event_details(self, workspace_id: str, query_event_id: str) -> QueryHistoryItem:
+        """Retrieve detailed query event information including response data"""
+        # Validate workspace exists
+        if not workspace_service.workspace_exists(workspace_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workspace not found",
+            )
+
+        try:
+            db = RelationalDB()
+            session = db.get_session()
+
+            try:
+                # Retrieve the specific query event
+                query_record = (
+                    session.query(ReasonerHistory)
+                    .filter(
+                        ReasonerHistory.id == query_event_id,
+                        ReasonerHistory.workspace_id == workspace_id,
+                    )
+                    .first()
+                )
+
+                if not query_record:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Query event with id '{query_event_id}' not found",
+                    )
+
+                return QueryHistoryItem(
+                    id=query_record.id,
+                    reasoner_id=query_record.reasoner_id,
+                    workspace_id=query_record.workspace_id,
+                    request_id=query_record.request_id,
+                    response_id=query_record.response_id,
+                    response_data=query_record.response_data,
+                    created_at=query_record.created_at,
+                )
+
+            finally:
+                session.close()
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to retrieve query event history: {str(e)}",
             )
 
 

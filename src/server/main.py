@@ -109,7 +109,7 @@ app.include_router(api_router, prefix="/api")
 if __name__ == "__main__":
     import uvicorn
 
-    log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
+    log_level = os.environ.get("LOG_LEVEL", "DEBUG").upper()
     logging.basicConfig(level=getattr(logging, log_level))
 
     logger = logging.getLogger(__name__)

@@ -75,6 +75,8 @@ class Reasoners(BaseModel):
 class QueryRequest(BaseModel):
     """Schema for storing reasoner query response"""
 
+    model_config = ConfigDict(extra="allow")
+
     reasoner_cognition_response_id: Optional[str] = Field(
         None,
         description="ID of the reasoner cognition response",
@@ -86,6 +88,10 @@ class QueryRequest(BaseModel):
     reasoner_cognition_request_id: Optional[str] = Field(
         None,
         description="ID of the reasoner cognition request",
+    )
+    query_input: Optional[str] = Field(
+        None,
+        description="The input query string",
     )
     records: Optional[List[Dict[str, Any]]] = Field(
         None,
@@ -123,3 +129,63 @@ class QueryHistory(BaseModel):
 
     records: List[QueryHistoryItem] = Field(..., description="List of query history records")
     total: int = Field(..., description="Total number of records")
+
+
+class QueryEvent(BaseModel):
+    """Schema for a query event"""
+
+    id: str = Field(..., description="Unique identifier for the query event")
+    reasoner_id: str = Field(..., description="ID of the reasoner")
+    workspace_id: str = Field(..., description="ID of the workspace")
+    request_id: Optional[str] = Field(None, description="Request ID")
+    response_id: Optional[str] = Field(None, description="Response ID")
+    created_at: datetime = Field(..., description="Timestamp when query was stored")
+    created_by: Optional[str] = Field(None, description="User who created the query")
+    query_input: Optional[str] = Field(None, description="The input query string")
+
+
+class QueryEvents(BaseModel):
+    """Schema for list of query events"""
+
+    records: List[QueryEvent] = Field(..., description="List of query events")
+    total: int = Field(..., description="Total number of records")
+
+
+class QueryEventFilter(BaseModel):
+    """Schema for filtering query events"""
+
+    reasoner_id: Optional[str] = Field(
+        None,
+        description="Filter by reasoner ID",
+    )
+    request_id: Optional[str] = Field(
+        None,
+        description="Filter by request ID",
+    )
+    response_id: Optional[str] = Field(
+        None,
+        description="Filter by response ID",
+    )
+    created_by: Optional[str] = Field(
+        None,
+        description="Filter by user who created the query",
+    )
+    start_date: Optional[datetime] = Field(
+        None,
+        description="Filter queries created on or after this date (ISO 8601 format)",
+    )
+    end_date: Optional[datetime] = Field(
+        None,
+        description="Filter queries created on or before this date (ISO 8601 format)",
+    )
+    limit: Optional[int] = Field(
+        100,
+        ge=1,
+        le=1000,
+        description="Maximum number of records to return (default: 100, max: 1000)",
+    )
+    offset: Optional[int] = Field(
+        0,
+        ge=0,
+        description="Number of records to skip (default: 0)",
+    )

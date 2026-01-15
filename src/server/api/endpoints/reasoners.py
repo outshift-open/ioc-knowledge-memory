@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status, Query, Body
 
 from server.schemas.reasoner import (
     ReasonerRequest,
@@ -7,7 +7,9 @@ from server.schemas.reasoner import (
     Reasoners,
     QueryRequest,
     QueryResponse,
-    QueryHistory,
+    QueryHistoryItem,
+    QueryEvents,
+    QueryEventFilter,
 )
 from server.services import reasoner_service
 
@@ -84,6 +86,9 @@ def delete_reasoner(workspace_id: str, reasoner_id: str, _purge: bool = False):
     return reasoner_service.delete_reasoner(workspace_id, reasoner_id, _purge)
 
 
+#################################################
+# Reasoner Query History Endpoints
+#################################################
 @router.post(
     "/{workspace_id}/reasoners/{reasoner_id}/query_history",
     response_model=QueryResponse,
@@ -107,20 +112,46 @@ def store_reasoner_query(
 
     Returns the stored query information
     """
-    return reasoner_service.store_query(workspace_id, reasoner_id, query_data.model_dump())
+    return reasoner_service.store_reasoner_event(workspace_id, reasoner_id, query_data.model_dump())
+
+
+@router.post(
+    "/{workspace_id}/reasoning_history/events",
+    response_model=QueryEvents,
+)
+def list_and_filter_reasoner_events(
+    workspace_id: str,
+    filters: QueryEventFilter = Body(default_factory=QueryEventFilter),
+):
+    """
+    List Events in a workspace with optional filters
+
+    - **workspace_id**: UUID of the workspace
+    - **reasoner_id**: Optional filter by reasoner ID. If not provided, returns events from all reasoners
+    - **request_id**: Optional filter by request ID
+    - **response_id**: Optional filter by response ID
+    - **created_by**: Optional filter by user who created the query
+    - **start_date**: Optional filter for queries created on or after this date (ISO 8601 format)
+    - **end_date**: Optional filter for queries created on or before this date (ISO 8601 format)
+    - **limit**: Maximum number of records to return (default: 100, max: 1000)
+    - **offset**: Number of records to skip for pagination (default: 0)
+
+    Returns list of query events from the workspace or a specific reasoner with pagination support
+    """
+    return reasoner_service.list_and_filter_reasoner_events(workspace_id, filters.reasoner_id, filters)
 
 
 @router.get(
-    "/{workspace_id}/reasoners/{reasoner_id}/query_history",
-    response_model=QueryHistory,
+    "/{workspace_id}/reasoning_history/events/{query_event_id}",
+    response_model=QueryHistoryItem,
 )
-def get_reasoner_query_history(workspace_id: str, reasoner_id: str):
+def get_reasoner_event_details(workspace_id: str, query_event_id: str):
     """
-    Get the reasoner query history
+    Get detailed query event information for a specific query event
 
     - **workspace_id**: UUID of the workspace
-    - **reasoner_id**: UUID of the reasoner
+    - **query_event_id**: UUID of the query event
 
-    Returns the reasoner query history
+    Returns detailed query event information including request/response IDs and response data
     """
-    return reasoner_service.get_query_history(workspace_id, reasoner_id)
+    return reasoner_service.get_reasoner_event_details(workspace_id, query_event_id)

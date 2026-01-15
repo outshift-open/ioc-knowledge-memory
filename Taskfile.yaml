@@ -96,19 +96,15 @@ tasks:
       - poetry run pytest src/server/database/graph_db/neo4j/models/test_edge.py -v
       - poetry run pytest src/server/api/endpoints/test_tkf.py -v
 
-  lint:
-    desc: Run linting and formatting
-    cmds:
-      - poetry run black server/
-      - poetry run flake8 server/
-    dir: "{{.SRC_DIR}}"
-
   lint-check:
-    desc: Check linting without making changes
+    desc: Run linting checks
     cmds:
-      - poetry run black --check server/
-      - poetry run flake8 server/
-    dir: "{{.SRC_DIR}}"
+      - ./scripts/lint.sh --check
+
+  lint:
+    desc: Fix linting issues automatically
+    cmds:
+      - ./scripts/lint.sh
 
   clean:
     desc: Clean Python cache files
@@ -182,6 +178,12 @@ tasks:
     cmds:
       - /usr/local/bin/atlasgo migrate hash --dir "file://migrations"
     dir: "src/server/database/relational_db"
+
+  db-seed:
+    desc: Seed the database with initial data
+    cmds:
+      - poetry run psql postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:5455/tkf -f scripts/populate_software.sql
+    dir: "{{.SRC_DIR}}/server/database/relational_db"
 
   help:
     desc: Show available tasks
