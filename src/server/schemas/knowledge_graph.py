@@ -1,10 +1,20 @@
 from typing import Dict, List, Literal, Optional, Any, Annotated
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator, BeforeValidator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator, computed_field, BeforeValidator
 from uuid import UUID, uuid4
+from enum import Enum
+
+
+class ResponseStatus(str, Enum):
+    """Enum for response status values used across knowledge graph endpoints."""
+
+    SUCCESS = "success"
+    FAILURE = "failure"
+    VALIDATION_ERROR = "validation error"
+    NOT_FOUND = "not found"
 
 
 class EmbeddingConfig(BaseModel):
-    """Configuration for embeddings in the TKF store."""
+    """Configuration for embeddings in the store."""
 
     name: str = Field(..., description="Name of the embedding model (e.g., huggingface model name)")
     data: List[float] = Field(default_factory=list, description="Embedding vector data")
@@ -44,9 +54,9 @@ class Relation(BaseModel):
         return v
 
 
-class TkfStoreRequest(BaseModel):
+class KnowledgeGraphStoreRequest(BaseModel):
     """
-    Represents a request to the TKF Store for storing and managing knowledge graph data.
+    Represents a request to the Store for storing and managing knowledge graph data.
 
     Attributes:
         request_id: Optional UUID for request tracking
@@ -59,15 +69,17 @@ class TkfStoreRequest(BaseModel):
     request_id: str = Field(
         default_factory=lambda: str(uuid4()), description="Auto-generated UUID for request tracking"
     )
-    records: Dict[Literal["concepts", "relations"], Any] = Field(
-        ..., description="Dictionary containing concepts and relations"
+    records: Optional[Dict[Literal["concepts", "relations"], Any]] = Field(
+        None, description="Dictionary containing concepts and relations"
     )
 
-    memory_type: Literal["Semantic", "Procedural", "Episodic"] = Field(..., description="Type of memory being stored")
+    memory_type: Optional[Literal["Semantic", "Procedural", "Episodic"]] = Field(
+        None, description="Type of memory being stored"
+    )
     mas_id: Optional[str] = Field(
         default=None, min_length=1, description="ID for the Multi-Agent System (Not required for Global Knowledge)"
     )
-    wksp_id: str = Field(..., min_length=1, description="Mandatory ID for the Multi-Agent System Workspace")
+    wksp_id: Optional[str] = Field(default=None, min_length=1, description="ID for the Multi-Agent System Workspace")
     force_replace: bool = Field(False, description="Force replace existing nodes and edges")
 
     model_config = ConfigDict(
@@ -114,7 +126,17 @@ class TkfStoreRequest(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_records_structure(self) -> "TkfStoreRequest":
+    def validate_mas_or_wksp_id(self) -> "KnowledgeGraphStoreRequest":
+        """Validate that either mas_id or wksp_id is provided."""
+        if not self.mas_id and not self.wksp_id:
+            raise ValueError("Either 'mas_id' or 'wksp_id' or both must be provided")
+        return self
+
+    @model_validator(mode="after")
+    def validate_records_structure(self) -> "KnowledgeGraphStoreRequest":
+        if self.records is None:
+            return self
+
         if not isinstance(self.records, dict):
             raise ValueError("Records must be a dictionary")
 
@@ -150,24 +172,36 @@ class TkfStoreRequest(BaseModel):
         return self
 
 
-class TkfStoreResponse(BaseModel):
+class KnowledgeGraphStoreResponse(BaseModel):
     """
-    Represents a response from the TKF Store after storing and managing knowledge graph data.
+    Represents a response from the Store after storing and managing knowledge graph data.
 
     Attributes:
         request_id: UUID for request tracking
-        status: Status of the request (success or failure)
+        status: Status of the request
         message: Optional message providing additional information
     """
 
-    request_id: str = Field(..., description="UUID for request tracking")
-    status: Literal["success", "failure"] = Field(..., description="Status of the request")
+    model_config = ConfigDict(exclude_none=True)
+
+    request_id: Optional[str] = Field(None, description="UUID for request tracking")
+    status: ResponseStatus = Field(..., description="Status of the request")
     message: Optional[str] = Field(None, description="Optional message providing additional information")
 
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Override model_dump to conditionally exclude request_id field."""
+        data = super().model_dump(**kwargs)
 
-class TkfDeleteRequest(BaseModel):
+        # Remove request_id field if it's None
+        if self.request_id is None and "request_id" in data:
+            del data["request_id"]
+
+        return data
+
+
+class KnowledgeGraphDeleteRequest(BaseModel):
     """
-    Represents a request to delete a TKF store.
+    Represents a request to delete a store.
 
     Attributes:
         request_id: UUID for request tracking
@@ -178,11 +212,11 @@ class TkfDeleteRequest(BaseModel):
     request_id: str = Field(
         default_factory=lambda: str(uuid4()), description="Auto-generated UUID for request tracking"
     )
-    records: Dict[Literal["concepts"], Any] = Field(..., description="Dictionary containing 'concepts' keys")
+    records: Optional[Dict[Literal["concepts"], Any]] = Field(None, description="Dictionary containing concepts")
     mas_id: Optional[str] = Field(
         default=None, min_length=1, description="ID for the Multi-Agent System (Not required for Global Knowledge)"
     )
-    wksp_id: str = Field(..., description="The workspace ID for the request")
+    wksp_id: Optional[str] = Field(default=None, min_length=1, description="The workspace ID for the request")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -202,41 +236,58 @@ class TkfDeleteRequest(BaseModel):
         }
     )
 
+    @model_validator(mode="after")
+    def validate_mas_or_wksp_id(self) -> "KnowledgeGraphDeleteRequest":
+        """Validate that either mas_id or wksp_id is provided."""
+        if not self.mas_id and not self.wksp_id:
+            raise ValueError("Either 'mas_id' or 'wksp_id' or both must be provided")
+        return self
 
-class TkfDeleteResponse(BaseModel):
+
+class KnowledgeGraphDeleteResponse(BaseModel):
     """
-    Represents a response from the TKF Store after deleting knowledge graph data.
+    Represents a response from the Store after deleting knowledge graph data.
 
     Attributes:
         request_id: UUID for request tracking
-        status: Status of the request (success or failure)
+        status: Status of the request
         message: Optional message providing additional information
     """
 
-    request_id: str = Field(..., description="UUID for request tracking")
-    status: Literal["success", "failure"] = Field(..., description="Status of the request")
+    model_config = ConfigDict(exclude_none=True)
+
+    request_id: Optional[str] = Field(None, description="UUID for request tracking")
+    status: ResponseStatus = Field(..., description="Status of the request")
     message: Optional[str] = Field(None, description="Optional message providing additional information")
 
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Override model_dump to conditionally exclude request_id field."""
+        data = super().model_dump(**kwargs)
 
-# TKF Query models
+        # Remove request_id field if it's None
+        if self.request_id is None and "request_id" in data:
+            del data["request_id"]
+
+        return data
+
+
+# Query models
 
 QUERY_TYPE_NEIGHBOUR = "neighbour"
 QUERY_TYPE_PATH = "path"
+QUERY_TYPE_CONCEPT = "concept"
 
 
-class QueryCriteria(BaseModel):
-    depth: Optional[int] = Field(default=1, description="Depth of the query (number of hops)")  # Unused
-    limit: Optional[int] = Field(
-        default=None,
-        description="Maximum number of results to return. "  # Unused
-        "Unspecified will return all results",
+class KnowledgeGraphQueryCriteria(BaseModel):
+    depth: Optional[int] = Field(
+        default=1, description="Depth of the query (number of hops) to be used for path queries"
     )
     query_type: str = Field(default=QUERY_TYPE_NEIGHBOUR, description="Type of query to execute")
 
 
-class TkfQueryRequest(BaseModel):
+class KnowledgeGraphQueryRequest(BaseModel):
     """
-    Represents a request to query the TKF store.
+    Represents a request to query the store.
 
     Attributes:
         request_id: UUID for request tracking
@@ -255,30 +306,83 @@ class TkfQueryRequest(BaseModel):
     memory_type: Optional[str] = Field(default=None, min_length=1, description="Memory type")
     mas_id: Optional[str] = Field(default=None, min_length=1, description="ID for the Multi-Agent System")
     wksp_id: Optional[str] = Field(default=None, min_length=1, description="ID for the Workspace")
-    query_criteria: Optional[QueryCriteria] = Field(
-        default_factory=QueryCriteria,  # This will create a new QueryCriteria with default values
+    query_criteria: Optional[KnowledgeGraphQueryCriteria] = Field(
+        default_factory=KnowledgeGraphQueryCriteria,  # This will create a new QueryCriteria with default values
         description="Query criteria",
     )
 
+    @model_validator(mode="after")
+    def validate_mas_or_wksp_id(self) -> "KnowledgeGraphQueryRequest":
+        """Validate that either mas_id or wksp_id is provided."""
+        if not self.mas_id and not self.wksp_id:
+            raise ValueError("Either 'mas_id' or 'wksp_id' or both must be provided")
+        return self
 
-class TkfQueryResponseRecord(BaseModel):
-    # queried_concept: Optional[Concept] = None
-    # empty if no results
+    @model_validator(mode="after")
+    def validate_concepts_count_for_query_type(self) -> "KnowledgeGraphQueryRequest":
+        """Validate that the number of concepts matches the query type requirements."""
+        if not self.records or "concepts" not in self.records:
+            raise ValueError("Records must exist with 'concepts' key")
+
+        concepts = self.records.get("concepts", [])
+        if not isinstance(concepts, list):
+            raise ValueError("concepts must be a list")
+
+        concepts_count = len(concepts)
+        query_type = self.query_criteria.query_type if self.query_criteria else QUERY_TYPE_NEIGHBOUR
+
+        if query_type == QUERY_TYPE_PATH:
+            if concepts_count != 2:
+                raise ValueError("Path queries require exactly 2 concepts (source and destination)")
+        elif query_type == QUERY_TYPE_NEIGHBOUR:
+            if concepts_count != 1:
+                raise ValueError("Neighbor queries require exactly 1 concept")
+        elif query_type == QUERY_TYPE_CONCEPT:
+            if concepts_count != 1:
+                raise ValueError("Concept queries require exactly 1 concept")
+        else:
+            # Default to neighbor query for QUERY_TYPE_NEIGHBOUR or any other type
+            if concepts_count != 1:
+                raise ValueError("Neighbor queries require exactly 1 concept")
+
+        return self
+
+
+class KnowledgeGraphQueryResponseRecord(BaseModel):
     relationships: List[Relation] = Field(default_factory=list)
     concepts: List[Concept] = Field(default_factory=list)
 
 
-class TkfQueryResponse(BaseModel):
+class KnowledgeGraphQueryResponse(BaseModel):
     """
-    Represents a response from the TKF Store after querying knowledge graph data.
+    Represents a response from the Store after querying knowledge graph data.
 
     Attributes:
         request_id: UUID for request tracking
-        status: Status of the request (success or failure)
+        status: Status of the request
         message: Optional message providing additional information
+        records: Optional list of query response records (only included for success status)
     """
 
-    request_id: str = Field(..., description="UUID for request tracking")
-    status: Literal["success", "failure"] = Field(..., description="Status of the request")
+    model_config = ConfigDict(exclude_none=True)
+
+    request_id: Optional[str] = Field(None, description="UUID for request tracking")
+    status: ResponseStatus = Field(..., description="Status of the request")
     message: Optional[str] = Field(None, description="Optional message providing additional information")
-    records: List[TkfQueryResponseRecord] = Field(default_factory=list)
+    records: Optional[List[KnowledgeGraphQueryResponseRecord]] = Field(
+        default=None, description="Query response records (only included for success status)"
+    )
+
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Override model_dump to conditionally exclude records and request_id fields."""
+        data = super().model_dump(**kwargs)
+
+        # Remove records field if status is not success OR if records is None/empty
+        if (self.records is None or (isinstance(self.records, list) and len(self.records) == 0)) and "records" in data:
+            del data["records"]
+
+        # Remove request_id field if it's None
+        if self.request_id is None and "request_id" in data:
+            del data["request_id"]
+
+        return data

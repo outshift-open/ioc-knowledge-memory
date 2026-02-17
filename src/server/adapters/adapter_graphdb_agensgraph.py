@@ -1,30 +1,63 @@
 import logging
 from typing import Tuple, List, Dict, Any
 
-from server.schemas.tkf import EmbeddingConfig
+from server.schemas.knowledge_graph import EmbeddingConfig
+import json
 
-from server.database.graph_db.neo4j.models.node import Node
-from server.database.graph_db.neo4j.models.edge import Edge
-from server.schemas.tkf import TkfQueryResponseRecord, Concept, Relation
-
-MAS_LABEL_PREFIX = "MAS_"
-WKSP_LABEL_PREFIX = "WKSP_"
-MEM_TYPE_LABEL_PREFIX = "MEM_TYPE_"
+from server.database.graph_db.agensgraph.models.node import Node
+from server.database.graph_db.agensgraph.models.edge import Edge
+from server.schemas.knowledge_graph import KnowledgeGraphQueryResponseRecord, Concept, Relation
 
 
-class Adapter_GraphDB_Neo4j:
-    """Adapter for converting TKF models to GraphDB models for Neo4j
+class AdapterGraphdbAgensgraph:
+    """Adapter for converting knowledge graph models to GraphDB models
     and vice versa."""
 
     def __init__(self):
         # Get logger instance (logging is setup in main.py)
         self.logger = logging.getLogger(__name__)
 
+    def _parse_json_field(self, value, default=None):
+        """Parse JSON string back to Python object if needed."""
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                return default if default is not None else []
+        return value
+
+    def get_graph_name(self, data: Dict[str, Any]) -> str:
+        """Get the graph name from the data.
+
+        Priority: mas_id > wksp_id > error if both empty
+        """
+        try:
+            # Extract common metadata
+            mas_id = data.get("mas_id", "")
+            wksp_id = data.get("wksp_id", "")
+
+            # Priority: mas_id first, then wksp_id, error if both empty
+            if mas_id:
+                # Convert hyphens to underscores for valid graph name
+                graph_id = mas_id.replace("-", "_")
+                return f"graph_{graph_id}"
+            elif wksp_id:
+                # Convert hyphens to underscores for valid graph name
+                graph_id = wksp_id.replace("-", "_")
+                return f"graph_{graph_id}"
+            else:
+                raise ValueError(
+                    "Both mas_id and wksp_id are empty. At least one must be provided for graph name generation."
+                )
+        except Exception as e:
+            self.logger.error(f"Error getting graph name: {str(e)}")
+            raise
+
     def convert_to_models(self, data: Dict[str, Any]) -> Tuple[List[Node], List[Edge]]:
-        """Convert TkfStoreRequest JSON to Node and Edge objects.
+        """Convert KnowledgeGraphStoreRequest JSON to Node and Edge objects.
 
         Args:
-            data: The parsed JSON data from TkfStoreRequest
+            data: The parsed JSON data from KnowledgeGraphStoreRequest
 
         Returns:
             tuple: (list of Node objects, list of Edge objects)
@@ -36,20 +69,18 @@ class Adapter_GraphDB_Neo4j:
         relationships = []
 
         try:
-            self._validate_input_data(data)
-
             # Extract common metadata
             mas_id = data.get("mas_id", "")
             wksp_id = data.get("wksp_id", "")
             memory_type = data.get("memory_type", "")
 
             # Process nodes
-            if "concepts" in data["records"] and data["records"]["concepts"]:
+            if data.get("records") and "concepts" in data["records"] and data["records"]["concepts"]:
                 self.logger.info(f"Processing {len(data['records']['concepts'])} concepts")
                 nodes = self._process_concepts(data["records"]["concepts"], mas_id, wksp_id, memory_type)
 
             # Process relationships
-            if "relations" in data["records"] and data["records"]["relations"]:
+            if data.get("records") and "relations" in data["records"] and data["records"]["relations"]:
                 self.logger.info(f"Processing {len(data['records']['relations'])} relations")
                 relationships = self._process_relations(data["records"]["relations"], mas_id, wksp_id, memory_type)
 
@@ -62,35 +93,10 @@ class Adapter_GraphDB_Neo4j:
             self.logger.error(f"Error converting data to models: {str(e)}", exc_info=True)
             raise  # Re-raise to allow caller to handle the error
 
-    def _validate_input_data(self, data: Dict[str, Any]) -> None:
-        """Validate the input data structure."""
-        if not isinstance(data, dict):
-            raise ValueError("Input data must be a dictionary")
-
-        if "records" not in data:
-            self.logger.error("Input data must contain 'records' key")
-            raise ValueError("Input data must contain 'records' key")
-
-        if not isinstance(data["records"], dict):
-            raise ValueError("'records' must be a dictionary")
-
-    def _generate_labels(self, concept: Dict, mas_id: str, wksp_id: str, memory_type: str) -> List[str]:
+    def _generate_labels(self) -> List[str]:
         """Generate labels for a node."""
+        # agensgraph supports single label only
         labels = ["Concept"]  # Default label
-
-        # Add metadata labels
-        if mas_id:
-            labels.append(f"{MAS_LABEL_PREFIX}{mas_id}")
-        if wksp_id:
-            labels.append(f"{WKSP_LABEL_PREFIX}{wksp_id}")
-        if memory_type:
-            labels.append(f"{MEM_TYPE_LABEL_PREFIX}{memory_type}")
-
-        # Add tags as labels
-        for tag in concept.get("tags", []):
-            if tag and str(tag).strip():
-                labels.append(str(tag).strip())
-
         return labels
 
     def _process_embeddings(self, embedding_data: Dict, properties: Dict) -> None:
@@ -122,12 +128,16 @@ class Adapter_GraphDB_Neo4j:
                 if memory_type:
                     properties["memory_type"] = memory_type
 
+                # Add tags as property
+                if "tags" in concept and concept["tags"]:
+                    properties["tags"] = concept["tags"]
+
                 # Handle embeddings
                 if "embeddings" in concept and concept["embeddings"]:
                     self._process_embeddings(concept["embeddings"], properties)
 
-                # Create node with appropriate labels
-                labels = self._generate_labels(concept, mas_id, wksp_id, memory_type)
+                # Create node with default label
+                labels = self._generate_labels()
 
                 node = Node(
                     id=concept["id"],
@@ -187,10 +197,10 @@ class Adapter_GraphDB_Neo4j:
 
     def convert_query_to_models(self, data: Dict[str, Any]) -> List[Node]:
         """
-        Convert a TkfQueryRequest into a list of Node objects for querying.
+        Convert a KnowledgeGraphQueryRequest into a list of Node objects for querying.
 
         Args:
-            data: Dictionary containing the query request data following TkfQueryRequest schema
+            data: Dictionary containing the query request data following KnowledgeGraphQueryRequest schema
 
         Returns:
             List of Node objects to be used for querying
@@ -214,6 +224,10 @@ class Adapter_GraphDB_Neo4j:
                 **concept.get("attributes", {}),
             }
 
+            # Add tags as property
+            if "tags" in concept and concept["tags"]:
+                properties["tags"] = concept["tags"]
+
             # Handle embeddings
             if "embeddings" in concept and concept["embeddings"]:
                 self._process_embeddings(concept["embeddings"], properties)
@@ -226,10 +240,8 @@ class Adapter_GraphDB_Neo4j:
             if "memory_type" in data:
                 properties["memory_type"] = data["memory_type"]
 
-            # Create node with appropriate labels
-            labels = self._generate_labels(
-                concept, data.get("mas_id", ""), data.get("wksp_id", ""), data.get("memory_type", "")
-            )
+            # Create node with default label
+            labels = self._generate_labels()
 
             node = Node(id=concept.get("id", ""), labels=labels, properties=properties)
             nodes.append(node)
@@ -238,19 +250,19 @@ class Adapter_GraphDB_Neo4j:
 
     def convert_models_to_query_response_records(
         self, db_results: List[Dict[str, Any]]
-    ) -> List[TkfQueryResponseRecord]:
+    ) -> List[KnowledgeGraphQueryResponseRecord]:
         """
-        Convert database query results to a list of TkfQueryResponseRecord objects.
+        Convert database query results to a list of KnowledgeGraphQueryResponseRecord objects.
 
         This method transforms the neo4j results into a structured format that matches
-        the TkfQueryResponseRecord schema.
+        the KnowledgeGraphQueryResponseRecord schema.
 
         Args:
             db_results: List of query results from the database. Each result should be a dictionary
                       containing 'node', 'relationships', and 'neighbors' keys.
 
         Returns:
-            List[TkfQueryResponseRecord]: A list of response records containing the converted data
+            List[KnowledgeGraphQueryResponseRecord]: A list of response records containing the converted data
 
         Example:
             db_results = [
@@ -270,104 +282,96 @@ class Adapter_GraphDB_Neo4j:
                 self.logger.warning(f"Skipping failed query result: {result.get('error')}")
                 continue
 
-            # Extract node data
-            # node_data = result.get("node", {})
-            relationships_data = result.get("relationships", [])
-            neighbors_data = result.get("neighbors", [])
-
-            # Create Concept for the queried node
-            # queried_concept = None
-            # if node_data:
-            #     # Initialize embeddings as None, only create EmbeddingConfig if we have embedding data
-            #     embeddings = None
-            #     if "embedding_vector" in node_data or "embedding_model" in node_data:
-            #         embeddings = EmbeddingConfig(
-            #             data=node_data.get("embedding_vector", []), name=node_data.get("embedding_model", "")
-            #         )
-            #
-            #     # Create attributes
-            #     attributes = dict(node_data)
-            #     for field in ["id", "name", "description", "embedding_vector", "embedding_model", "embeddings", "tags"]:
-            #         attributes.pop(field, None)
-            #
-            #     queried_concept = Concept(
-            #         id=node_data.get("id"),
-            #         name=node_data.get("name", ""),
-            #         description=node_data.get("description"),
-            #         attributes=attributes,
-            #         embeddings=embeddings,
-            #         tags=node_data.get("tags", []),
-            #     )
+            # Extract data
+            edges_data = result.get("edges", [])
+            nodes_data = result.get("nodes", [])
 
             # Create Relation objects
             relations = []
-            for rel in relationships_data:
+            for edge in edges_data:
                 # Create Relation with required fields and handle potential None values
-                self.logger.info(f"Converting model to Relation for response: {rel}")
+                self.logger.info(f"Converting model to Relation for response: {edge}")
+
+                # Extract properties from edge - they might be nested in 'properties' key
+                edge_props = edge.get("properties", edge)
 
                 # Get relation from edge property 'relation'
-                relation = rel.get("relation")
+                relation = edge_props.get("relation")
+                # Parse node_ids JSON string back to list if needed
+                node_ids = self._parse_json_field(edge_props.get("node_ids", []))
+
+                # Skip invalid relations - relation must be a non-empty string and node_ids must have at least 2 items
+                if not relation or not isinstance(relation, str) or len(node_ids) < 2:
+                    self.logger.warning(f"Skipping invalid relation: relation='{relation}', node_ids={node_ids}")
+                    continue
+
                 # Initialize embeddings as None, only create EmbeddingConfig if we have embedding data
                 embeddings = None
-                if "embedding_vector" in rel or "embedding_model" in rel:
-                    embeddings = EmbeddingConfig(
-                        data=rel.get("embedding_vector", []), name=rel.get("embedding_model", "")
-                    )
+                if "embedding_vector" in edge_props or "embedding_model" in edge_props:
+                    # Parse JSON string back to list if needed
+                    embedding_vector = self._parse_json_field(edge_props.get("embedding_vector", []))
+
+                    embeddings = EmbeddingConfig(data=embedding_vector, name=edge_props.get("embedding_model", ""))
 
                 # Create attributes without the embedding fields
-                rel_attributes = {
+                edge_attributes = {
                     k: v
-                    for k, v in rel.items()
+                    for k, v in edge_props.items()
                     if k not in ["id", "node_ids", "relation", "embedding_vector", "embedding_model", "embeddings"]
                 }
 
                 relations.append(
                     Relation(
-                        id=rel.get("id", ""),
+                        id=edge_props.get("id", ""),
                         relation=relation,
-                        node_ids=rel.get("node_ids", []),
-                        attributes=rel_attributes,
+                        node_ids=node_ids,
+                        attributes=edge_attributes,
                         embeddings=embeddings,
                     )
                 )
             self.logger.info(f"Created {len(relations)} relations")
 
             # Create Concept objects for neighbor nodes
-            neighbor_concepts = []
-            for neighbor in neighbors_data:
-                self.logger.info(f"Converting model to Concept for response: {neighbor}")
+            concepts = []
+            for node in nodes_data:
+                self.logger.info(f"Converting model to Concept for response: {node}")
 
-                # Initialize neighbor_embeddings as None, only create EmbeddingConfig if we have embedding data
-                neighbor_embeddings = None
-                if "embedding_vector" in neighbor or "embedding_model" in neighbor:
-                    neighbor_embeddings = EmbeddingConfig(
-                        data=neighbor.get("embedding_vector", []), name=neighbor.get("embedding_model", "")
-                    )
+                # Extract properties from node - they might be nested in 'properties' key
+                node_props = node.get("properties", node)
 
-                # Create attributes
-                neighbor_attributes = dict(neighbor)
-                for field in ["id", "name", "description", "embedding_vector", "embedding_model", "embeddings", "tags"]:
-                    neighbor_attributes.pop(field, None)
+                # Initialize embeddings as None, only create EmbeddingConfig if we have embedding data
+                node_embeddings = None
+                if "embedding_vector" in node_props or "embedding_model" in node_props:
+                    # Parse JSON string back to list if needed
+                    embedding_vector = self._parse_json_field(node_props.get("embedding_vector", []))
 
-                neighbor_concepts.append(
+                    node_embeddings = EmbeddingConfig(data=embedding_vector, name=node_props.get("embedding_model", ""))
+
+                # Create attributes without the embedding fields
+                node_attributes = {
+                    k: v
+                    for k, v in node_props.items()
+                    if k
+                    not in ["id", "name", "description", "embedding_vector", "embedding_model", "embeddings", "tags"]
+                }
+
+                # Parse tags JSON string back to list if needed
+                tags = self._parse_json_field(node_props.get("tags", []))
+
+                concepts.append(
                     Concept(
-                        id=neighbor.get("id"),
-                        name=neighbor.get("name", ""),
-                        description=neighbor.get("description"),
-                        attributes=neighbor_attributes,
-                        embeddings=neighbor_embeddings,
-                        tags=neighbor.get("tags", []),
+                        id=node_props.get("id"),
+                        name=node_props.get("name", ""),
+                        description=node_props.get("description"),
+                        attributes=node_attributes,
+                        embeddings=node_embeddings,
+                        tags=tags,
                     )
                 )
-            self.logger.info(f"Created {len(neighbor_concepts)} neighbor concepts")
+            self.logger.info(f"Created {len(concepts)} concepts")
 
             # Create the response record
-            # records.append(
-            #     TkfQueryResponseRecord(
-            #         queried_concept=queried_concept, relationships=relations, concepts=neighbor_concepts
-            #     )
-            # )
-            records.append(TkfQueryResponseRecord(relationships=relations, concepts=neighbor_concepts))
+            records.append(KnowledgeGraphQueryResponseRecord(relationships=relations, concepts=concepts))
 
-        self.logger.info(f"Converted {len(records)} records to TkfQueryResponseRecord objects")
+        self.logger.info(f"Converted {len(records)} records to KnowledgeGraphQueryResponseRecord objects")
         return records

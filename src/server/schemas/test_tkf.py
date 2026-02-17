@@ -262,7 +262,6 @@ class TestTkfQueryResponseRecord:
     def test_empty_record(self):
         """Test record with no data."""
         record = TkfQueryResponseRecord()
-        assert record.queried_concept is None
         assert record.relationships == []
         assert record.concepts == []
 
@@ -271,9 +270,8 @@ class TestTkfQueryResponseRecord:
         concept = Concept(id="c1", name="Test Concept")
         relation = Relation(id="r1", relation="HAS", node_ids=["c1", "c2"])
 
-        record = TkfQueryResponseRecord(queried_concept=concept, relationships=[relation], concepts=[concept])
+        record = TkfQueryResponseRecord(relationships=[relation], concepts=[concept])
 
-        assert record.queried_concept == concept
         assert record.relationships == [relation]
         assert record.concepts == [concept]
 
@@ -291,8 +289,7 @@ class TestTkfQueryResponse:
 
     def test_full_response(self):
         """Test response with all fields populated."""
-        concept = Concept(id="c1", name="Test Concept")
-        record = TkfQueryResponseRecord(queried_concept=concept)
+        record = TkfQueryResponseRecord()
 
         response = TkfQueryResponse(
             request_id="test-request", status="success", message="Query executed successfully", records=[record]
@@ -302,7 +299,6 @@ class TestTkfQueryResponse:
         assert response.status == "success"
         assert response.message == "Query executed successfully"
         assert len(response.records) == 1
-        assert response.records[0].queried_concept == concept
 
     def test_invalid_status(self):
         """Test that invalid status raises validation error."""

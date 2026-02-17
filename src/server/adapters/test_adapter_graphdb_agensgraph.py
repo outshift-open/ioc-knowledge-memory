@@ -1,28 +1,17 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from server.adapters.adapter_graphdb_neo4j import Adapter_GraphDB_Neo4j
-from server.database.graph_db.neo4j.models.node import Node
-from server.database.graph_db.neo4j.models.edge import Edge
-from server.adapters.adapter_graphdb_neo4j import MAS_LABEL_PREFIX, WKSP_LABEL_PREFIX, MEM_TYPE_LABEL_PREFIX
+from server.adapters.adapter_graphdb_agensgraph import AdapterGraphdbAgensgraph
+from server.database.graph_db.agensgraph.models.node import Node
+from server.database.graph_db.agensgraph.models.edge import Edge
 
 
-class TestAdapterGraphDBNeo4j:
-    """Test suite for Adapter_GraphDB_Neo4j class."""
+class TestAdapterGraphdbAgensgraph:
+    """Test suite for AdapterGraphdbAgensgraph class."""
 
     @pytest.fixture
     def adapter(self):
         """Fixture to create a fresh adapter instance for each test."""
-        return Adapter_GraphDB_Neo4j()
-
-    def test_convert_to_models_empty_input(self, adapter):
-        """Test convert_to_models with empty input data."""
-        with pytest.raises(ValueError, match="Input data must contain 'records' key"):
-            adapter.convert_to_models({})
-
-    def test_convert_to_models_invalid_records_type(self, adapter):
-        """Test convert_to_models with invalid records type."""
-        with pytest.raises(ValueError, match="'records' must be a dictionary"):
-            adapter.convert_to_models({"records": "not_a_dict"})
+        return AdapterGraphdbAgensgraph()
 
     def test_convert_to_models_with_missing_mas_id(self, adapter):
         """Test convert_to_models with missing mas_id."""
@@ -38,7 +27,7 @@ class TestAdapterGraphDBNeo4j:
 
         # Check nodes
         for node in nodes:
-            assert MAS_LABEL_PREFIX not in node.labels, "mas_id value should not be in node labels"
+            assert "mas_id" not in node.properties, "mas_id key should not be in node properties"
 
         # Check edges
         for edge in edges:
@@ -49,15 +38,7 @@ class TestAdapterGraphDBNeo4j:
         # Test data with node, relationships, and neighbors
         test_data = [
             {
-                "node": {
-                    "id": "1",
-                    "name": "Test Node",
-                    "description": "Test Description",
-                    "embedding_vector": [0.1, 0.2, 0.3],
-                    "embedding_model": "test-model-1",
-                    "custom_attr": "value1",
-                },
-                "relationships": [
+                "edges": [
                     {
                         "id": "r1",
                         "relation": "RELATED_TO",
@@ -67,7 +48,7 @@ class TestAdapterGraphDBNeo4j:
                         "custom_rel_attr": "rel_value1",
                     }
                 ],
-                "neighbors": [
+                "nodes": [
                     {"id": "2", "name": "Neighbor Node", "description": "Neighbor Description", "custom_attr": "value2"}
                 ],
             }
@@ -102,11 +83,10 @@ class TestAdapterGraphDBNeo4j:
         """Test convert_models_to_query_response_records with nodes without embeddings."""
         test_data = [
             {
-                "node": {"id": "1", "name": "Test Node", "description": "Test Description", "custom_attr": "value1"},
-                "relationships": [
+                "nodes": [{"id": "1", "name": "Test Node", "description": "Test Description", "custom_attr": "value1"}],
+                "edges": [
                     {"id": "r1", "relation": "RELATED_TO", "node_ids": ["1", "2"], "custom_rel_attr": "rel_value1"}
                 ],
-                "neighbors": [],
             }
         ]
 
@@ -161,11 +141,6 @@ class TestAdapterGraphDBNeo4j:
         assert node.id == "concept1"
         assert set(node.labels) == {
             "Concept",
-            f"{MAS_LABEL_PREFIX}test_mas",
-            f"{WKSP_LABEL_PREFIX}test_wksp",
-            f"{MEM_TYPE_LABEL_PREFIX}test_memory",
-            "tag1",
-            "tag2",
         }
         assert node.properties["name"] == "Test Concept"
         assert node.properties["description"] == "A test concept"
@@ -285,9 +260,6 @@ class TestAdapterGraphDBNeo4j:
         # Should only have the default and metadata labels, no tag labels
         assert set(node.labels) == {
             "Concept",
-            f"{MAS_LABEL_PREFIX}test_mas",
-            f"{WKSP_LABEL_PREFIX}test_wksp",
-            f"{MEM_TYPE_LABEL_PREFIX}test_memory",
         }
 
     def test_convert_to_models_with_concepts_no_attributes(self, adapter):
@@ -311,7 +283,14 @@ class TestAdapterGraphDBNeo4j:
         node = nodes[0]
 
         # Should have default properties and embeddings, but no additional attributes
-        assert set(node.properties.keys()) == {"name", "description", "embedding_vector", "embedding_model", "mas_id"}
+        assert set(node.properties.keys()) == {
+            "name",
+            "description",
+            "embedding_vector",
+            "embedding_model",
+            "mas_id",
+            "tags",
+        }
 
     def test_convert_to_models_with_concepts_no_embeddings(self, adapter):
         """Test convert_to_models with concept data that has no embeddings."""

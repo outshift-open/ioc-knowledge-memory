@@ -439,6 +439,10 @@ class GraphDB:
 
         try:
             if query_type == QUERY_TYPE_NEIGHBOUR:
+                # validate input
+                if len(nodes) > 1:
+                    raise ValueError("Only one node can be used for neighbor query")
+
                 # First, check if all nodes exist
                 missing_nodes = []
                 for node in nodes:

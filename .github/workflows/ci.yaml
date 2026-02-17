@@ -285,7 +285,7 @@ jobs:
     needs: [
         checkout-unit-tests,
         call-docker-build-push,
-        call-helm-publish,
+        # call-helm-publish,
         # call-trigger-cd,
       ]
     if: always()

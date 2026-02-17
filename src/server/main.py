@@ -6,12 +6,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from server.api.api import api_router
+from server.api.exception_handlers import validation_exception_handler
 from server.database.relational_db.db import RelationalDB
 from server.database.graph_db.neo4j.src.db_async import GraphDB
+from server.database.graph_db.agensgraph.src.db import GraphDB as AgensGraphDB
 
 from server.common import service_name
 from server.services.user import UserService
 from app_logging.logger import setup_logging
+from fastapi.exceptions import RequestValidationError
 
 # Load environment variables from .env file in current or parent directories
 load_dotenv(override=True)
@@ -38,6 +41,10 @@ async def lifespan(app: FastAPI):
     try:
         graph_db = GraphDB()
         await graph_db.init()
+
+        agensgraph_db = AgensGraphDB()
+        agensgraph_db.init()
+
     except Exception as e:
         logger.error(f"Graph Database initialization failed: {str(e)}")
         raise
@@ -56,6 +63,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Closing database connection...")
     db.close()
+    agensgraph_db.close()
     await graph_db.close()
     logger.info("Database connection closed")
 
@@ -78,6 +86,9 @@ app.add_middleware(
 instrumentator = Instrumentator()
 instrumentator.instrument(app)
 instrumentator.expose(app, endpoint="/metrics")
+
+# Add exception handlers
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
 
 
 @app.get("/health")

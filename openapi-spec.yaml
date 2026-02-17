@@ -1,0 +1,704 @@
+openapi: 3.0.3
+info:
+  title: IOC Knowledge Memory Service API
+  description: |
+    A comprehensive knowledge management service that provides graph-based, vector-based, and key-value pair storage capabilities for AI systems.
+    
+    This service supports:
+    - **Knowledge Graph Storage**: Store and query concepts and relationships in a graph database
+    - **Vector Storage**: Store and query vector embeddings (coming soon)
+    - **Key-Value Pair Storage**: Store and query structured data (coming soon)
+    
+    The service is designed to support Multi-Agent Systems (MAS) with workspace-based data isolation and supports different memory types (Semantic, Procedural, Episodic).
+  version: "1.0.0"
+
+servers:
+  - url: http://localhost:8001/api
+    description: Local development server
+
+tags:
+  - name: knowledge-graph
+    description: Graph-based knowledge storage and querying operations
+  - name: knowledge-vector
+    description: Vector-based knowledge storage and querying operations (not implemented)
+  - name: knowledge-kvp
+    description: Key-value pair knowledge storage and querying operations (not implemented)
+  - name: internal-knowledge-graph
+    description: Internal graph-based knowledge operations
+  - name: internal-knowledge-vector
+    description: Internal vector-based knowledge operations (not implemented)
+  - name: internal-knowledge-kvp
+    description: Internal key-value pair knowledge operations (not implemented)
+  - name: health
+    description: Service health and monitoring endpoints
+
+paths:
+  # Health endpoints
+  /health:
+    get:
+      tags:
+        - health
+      summary: Health check endpoint
+      description: Returns the health status of the service
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+
+  /env:
+    get:
+      tags:
+        - health
+      summary: Environment variables endpoint
+      description: Returns service information and environment variables
+      operationId: getEnvironment
+      responses:
+        '200':
+          description: Environment information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service:
+                    type: string
+                    example: "ci-tkf-data-logic-svc"
+                  environment_variables:
+                    type: object
+                    additionalProperties:
+                      type: string
+
+  # Knowledge Graph endpoints
+  /knowledge/graphs:
+    post:
+      tags:
+        - knowledge-graph
+      summary: Create or update knowledge graph data
+      description: |
+        Store concepts and relationships in the knowledge graph database.
+        Supports different memory types and workspace isolation.
+      operationId: createGraphStore
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeGraphStoreRequest'
+      responses:
+        '201':
+          description: Knowledge graph data successfully created/updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeGraphStoreResponse'
+        '400':
+          description: Bad request - validation error (missing required fields, invalid data format, or business logic validation failure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeGraphStoreResponse'
+              example:
+                request_id: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+                status: "validation error"
+                message: "Request validation failed: body: Value error, Either 'mas_id' or 'wksp_id' must be provided"
+        '500':
+          description: Internal server error - unexpected system failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeGraphStoreResponse'
+              example:
+                request_id: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+                status: "failure"
+                message: "Database connection failed - unable to store knowledge graph data"
+
+    delete:
+      tags:
+        - knowledge-graph
+      summary: Delete knowledge graph data
+      description: Delete specific concepts and relationships from the knowledge graph
+      operationId: deleteGraphStore
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeGraphDeleteRequest'
+      responses:
+        '200':
+          description: Knowledge graph data successfully deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeGraphDeleteResponse'
+        '400':
+          description: Bad request - validation error (missing required fields, invalid data format, or business logic validation failure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeGraphDeleteResponse'
+              example:
+                request_id: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+                status: "validation error"
+                message: "Request validation failed: records -> concepts: field required"
+        '500':
+          description: Internal server error - unexpected system failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeGraphDeleteResponse'
+              example:
+                request_id: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+                status: "failure"
+                message: "Graph database error - unable to delete knowledge graph data"
+
+  /knowledge/graphs/query:
+    post:
+      tags:
+        - knowledge-graph
+      summary: Query knowledge graph data
+      description: |
+        Execute queries against the knowledge graph to find concepts and relationships.
+        Supports different query types:
+        - **neighbor**: Find concepts connected to a single concept (requires 1 concept)
+        - **path**: Find paths between two concepts (requires 2 concepts)
+        - **concept**: Retrieve a single concept by its ID (requires 1 concept)
+      operationId: queryGraphStore
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeGraphQueryRequest'
+      responses:
+        '200':
+          description: Query executed successfully - returns matching knowledge graph data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeGraphQueryResponse'
+        '400':
+          description: Bad request - validation error (invalid query parameters, wrong concept count for query type, missing required fields)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeGraphQueryResponse'
+              example:
+                request_id: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+                status: "validation error"
+                message: "Request validation failed: Path queries require exactly 2 concepts (source and destination)"
+        '404':
+          description: Not found - requested concepts or relationships do not exist in the knowledge graph
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeGraphQueryResponse'
+        '500':
+          description: Internal server error - unexpected system failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeGraphQueryResponse'
+              example:
+                request_id: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+                status: "failure"
+                message: "Query execution failed - database timeout or connection error"
+
+  # Internal Knowledge Graph endpoints
+  /internal/knowledge/graphs:
+    delete:
+      tags:
+        - internal-knowledge-graph
+      summary: Internal delete knowledge graph data
+      description: Internal API endpoint for deleting knowledge graph data
+      operationId: internalDeleteGraphStore
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeGraphDeleteRequest'
+      responses:
+        '200':
+          description: Knowledge graph data successfully deleted (internal endpoint)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeGraphDeleteResponse'
+        '400':
+          description: Bad request - validation error (missing required fields, invalid data format, or business logic validation failure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeGraphDeleteResponse'
+              example:
+                request_id: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+                status: "validation error"
+                message: "Request validation failed: mas_id: field required"
+        '500':
+          description: Internal server error - unexpected system failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeGraphDeleteResponse'
+              example:
+                request_id: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+                status: "failure"
+                message: "Internal service error - unable to process delete request"
+
+  # Knowledge Vector endpoints (not implemented)
+  /knowledge/vectors:
+    post:
+      tags:
+        - knowledge-vector
+      summary: Create or update vector knowledge store
+      description: Vector knowledge store creation (not yet implemented)
+      operationId: createVectorStore
+      responses:
+        '501':
+          description: Not implemented
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: "Vector knowledge store creation is not yet implemented"
+        '500':
+          description: Internal server error
+
+    delete:
+      tags:
+        - knowledge-vector
+      summary: Delete vector knowledge store
+      description: Vector knowledge store deletion (not yet implemented)
+      operationId: deleteVectorStore
+      responses:
+        '501':
+          description: Not implemented
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: "Vector knowledge store deletion is not yet implemented"
+        '500':
+          description: Internal server error
+
+  /knowledge/vectors/query:
+    post:
+      tags:
+        - knowledge-vector
+      summary: Query vector knowledge store
+      description: Vector knowledge store querying (not yet implemented)
+      operationId: queryVectorStore
+      responses:
+        '501':
+          description: Not implemented
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: "Vector knowledge store querying is not yet implemented"
+        '500':
+          description: Internal server error
+
+  # Knowledge KVP endpoints (not implemented)
+  /knowledge/kvps:
+    post:
+      tags:
+        - knowledge-kvp
+      summary: Create or update KVP knowledge store
+      description: KVP knowledge store creation (not yet implemented)
+      operationId: createKvpStore
+      responses:
+        '501':
+          description: Not implemented
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: "KVP knowledge store creation is not yet implemented"
+        '500':
+          description: Internal server error
+
+    delete:
+      tags:
+        - knowledge-kvp
+      summary: Delete KVP knowledge store
+      description: KVP knowledge store deletion (not yet implemented)
+      operationId: deleteKvpStore
+      responses:
+        '501':
+          description: Not implemented
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: "KVP knowledge store deletion is not yet implemented"
+        '500':
+          description: Internal server error
+
+  /knowledge/kvps/query:
+    post:
+      tags:
+        - knowledge-kvp
+      summary: Query KVP knowledge store
+      description: KVP knowledge store querying (not yet implemented)
+      operationId: queryKvpStore
+      responses:
+        '501':
+          description: Not implemented
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: "KVP knowledge store querying is not yet implemented"
+        '500':
+          description: Internal server error
+
+components:
+  schemas:
+    ResponseStatus:
+      type: string
+      enum:
+        - success
+        - failure
+        - validation error
+        - not found
+      description: Status of the API response
+
+    EmbeddingConfig:
+      type: object
+      description: Configuration for embeddings in the store
+      properties:
+        name:
+          type: string
+          description: Name of the embedding model (e.g., huggingface model name)
+          example: "text-embedding-ada-002"
+        data:
+          type: array
+          items:
+            type: number
+            format: float
+          description: Embedding vector data
+          example: [0.1, 0.2, 0.3, -0.1, 0.5]
+      required:
+        - name
+
+    Concept:
+      type: object
+      description: Represents a concept in the knowledge graph
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the concept
+          example: "123e4567-e89b-12d3-a456-426614174001"
+        name:
+          type: string
+          description: Name of the concept
+          example: "Artificial Intelligence"
+        description:
+          type: string
+          description: Detailed description of the concept
+          example: "AI technology and machine learning concepts"
+        attributes:
+          type: object
+          additionalProperties: true
+          description: Additional attributes for the concept
+          example: {"category": "technology", "importance": "high"}
+        embeddings:
+          $ref: '#/components/schemas/EmbeddingConfig'
+        tags:
+          type: array
+          items:
+            type: string
+          description: Optional list of tags for categorization
+          example: ["AI", "ML", "technology"]
+      required:
+        - id
+        - name
+
+    Relation:
+      type: object
+      description: Represents a relationship between concepts
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the relation
+          example: "rel-123e4567-e89b-12d3-a456-426614174001"
+        relation:
+          type: string
+          description: Type of relationship between nodes
+          example: "is_related_to"
+        node_ids:
+          type: array
+          items:
+            type: string
+          minItems: 2
+          description: List of node IDs this relation connects (minimum 2)
+          example: ["123e4567-e89b-12d3-a456-426614174001", "456e7890-e12b-34c5-d678-901234567890"]
+        attributes:
+          type: object
+          additionalProperties: true
+          description: Additional attributes for the relation
+          example: {"strength": 0.8, "type": "semantic"}
+        embeddings:
+          $ref: '#/components/schemas/EmbeddingConfig'
+      required:
+        - id
+        - relation
+        - node_ids
+
+    KnowledgeGraphStoreRequest:
+      type: object
+      description: Request to store knowledge graph data
+      properties:
+        request_id:
+          type: string
+          description: Auto-generated UUID for request tracking
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        records:
+          type: object
+          description: Dictionary containing concepts and relations (optional)
+          properties:
+            concepts:
+              type: array
+              items:
+                $ref: '#/components/schemas/Concept'
+            relations:
+              type: array
+              items:
+                $ref: '#/components/schemas/Relation'
+          required:
+            - concepts
+        memory_type:
+          type: string
+          enum:
+            - Semantic
+            - Procedural
+            - Episodic
+          description: Type of memory being stored (optional)
+          example: "Semantic"
+        mas_id:
+          type: string
+          minLength: 1
+          description: ID for the Multi-Agent System (Not required for Global Knowledge)
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        wksp_id:
+          type: string
+          minLength: 1
+          description: ID for the Multi-Agent System Workspace
+          example: "223e4567-e89b-12d3-a456-426614174000"
+        force_replace:
+          type: boolean
+          description: Force replace existing nodes and edges
+          default: false
+
+    KnowledgeGraphStoreResponse:
+      type: object
+      description: Response from knowledge graph store operation
+      properties:
+        request_id:
+          type: string
+          description: UUID for request tracking (optional - excluded if null)
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        status:
+          $ref: '#/components/schemas/ResponseStatus'
+        message:
+          type: string
+          description: Optional message providing additional information
+          example: "Knowledge graph data stored successfully"
+      required:
+        - status
+
+    KnowledgeGraphDeleteRequest:
+      type: object
+      description: Request to delete knowledge graph data
+      properties:
+        request_id:
+          type: string
+          description: Auto-generated UUID for request tracking
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        records:
+          type: object
+          description: Dictionary containing concepts to delete (optional)
+          properties:
+            concepts:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: ID of the concept to delete
+                    example: "123e4567-e89b-12d3-a456-426614174001"
+                required:
+                  - id
+          required:
+            - concepts
+        mas_id:
+          type: string
+          minLength: 1
+          description: ID for the Multi-Agent System
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        wksp_id:
+          type: string
+          minLength: 1
+          description: ID for the Multi-Agent System Workspace
+          example: "223e4567-e89b-12d3-a456-426614174000"
+
+    KnowledgeGraphDeleteResponse:
+      type: object
+      description: Response from knowledge graph delete operation
+      properties:
+        request_id:
+          type: string
+          description: UUID for request tracking (optional - excluded if null)
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        status:
+          $ref: '#/components/schemas/ResponseStatus'
+        message:
+          type: string
+          description: Optional message providing additional information
+          example: "Knowledge graph data deleted successfully"
+      required:
+        - status
+
+    KnowledgeGraphQueryCriteria:
+      type: object
+      description: Query criteria for knowledge graph operations
+      properties:
+        depth:
+          type: integer
+          minimum: 1
+          default: 1
+          description: Depth of the query (number of hops) to be used for path queries
+          example: 2
+        query_type:
+          type: string
+          enum:
+            - neighbour
+            - path
+            - concept
+          default: "neighbour"
+          description: Type of query to execute
+          example: "neighbour"
+      required:
+        - query_type
+
+    KnowledgeGraphQueryRequest:
+      type: object
+      description: Request to query knowledge graph data
+      properties:
+        request_id:
+          type: string
+          description: Auto-generated UUID for request tracking
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        records:
+          type: object
+          description: Dictionary containing concepts to query
+          properties:
+            concepts:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: ID of the concept to query
+                    example: "123e4567-e89b-12d3-a456-426614174001"
+                required:
+                  - id
+          required:
+            - concepts
+        query_criteria:
+          $ref: '#/components/schemas/KnowledgeGraphQueryCriteria'
+        mas_id:
+          type: string
+          minLength: 1
+          description: ID for the Multi-Agent System
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        wksp_id:
+          type: string
+          minLength: 1
+          description: ID for the Multi-Agent System Workspace
+          example: "223e4567-e89b-12d3-a456-426614174000"
+      required:
+        - records
+      example:
+        request_id: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        mas_id: "123e4567-e89b-12d3-a456-426614174000"
+        wksp_id: "223e4567-e89b-12d3-a456-426614174000"
+        query_criteria:
+          query_type: "path"
+          depth: 2
+        records:
+          concepts:
+            - id: "123e4567-e89b-12d3-a456-426614174001"
+            - id: "456e7890-e12b-34c5-d678-901234567890"
+
+    KnowledgeGraphQueryResponseRecord:
+      type: object
+      description: Individual record in query response
+      properties:
+        concepts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Concept'
+          description: List of concepts found in the query
+        relations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Relation'
+          description: List of relations found in the query
+
+    KnowledgeGraphQueryResponse:
+      type: object
+      description: Response from knowledge graph query operation
+      properties:
+        request_id:
+          type: string
+          description: UUID for request tracking (optional - excluded if null)
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        status:
+          $ref: '#/components/schemas/ResponseStatus'
+        message:
+          type: string
+          description: Optional message providing additional information
+          example: "Query executed successfully"
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeGraphQueryResponseRecord'
+          description: Query response records (excluded if null or empty)
+      required:
+        - status
+
+
+externalDocs:
+  description: Find more info about the IOC Knowledge Memory Service
+  url: https://docs.cisco.com/ioc-knowledge-memory

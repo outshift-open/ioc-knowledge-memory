@@ -1,10 +1,11 @@
 [project]
-name = "ci-tkf-data-logic-svc"
+name = "ioc-knowledge-memory-svc"
 version = "0.1.0"
-description = "TKF Data Logic Service"
+description = "ioc-knowledge-memory-svc"
 readme = "README.md"
 requires-python = ">=3.10,<4.0.0"
 dependencies = [
+    "agensgraph-python==1.0.2",
     "fastapi==0.104.1",
     "uvicorn[standard]==0.24.0", 
     "prometheus-fastapi-instrumentator==6.1.0",

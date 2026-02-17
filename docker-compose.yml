@@ -1,4 +1,37 @@
 services:
+  ioc-graph-db:
+    image: skaiworldwide/agensgraph:v2.16.0-alpine3.22
+    platform: linux/amd64
+    profiles:
+      - db-only
+    environment:
+      POSTGRES_DB: ${AGENSGRAPH_DB:-ioc-graph-db}
+      POSTGRES_USER: ${AGENSGRAPH_USER}
+      POSTGRES_PASSWORD: ${AGENSGRAPH_PASSWORD}
+    ports:
+      - "${AGENSGRAPH_PORT:-5456}:5432"
+    volumes:
+      - agensgraph_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U $$POSTGRES_USER -d $$AGENSGRAPH_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  ioc-graph-db-viewer:
+    image: skaiworldwide/agviewer:latest
+    environment:
+      DB_HOST: ioc-graph-db
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${AGENSGRAPH_DB:-ioc-graph-db}
+    ports:
+      - "${AGENSGRAPH_PORT_UI:-3000}:3000"
+    depends_on:
+      - ioc-graph-db
+
   tkf-relational-db:
     image: timescale/timescaledb-ha:pg17
     profiles:
@@ -82,3 +115,4 @@ volumes:
   timescaledb_data:
   neo4j_data:
   neo4j_logs:
+  agensgraph_data:

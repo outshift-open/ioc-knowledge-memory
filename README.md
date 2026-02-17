@@ -1,4 +1,4 @@
-# ci-tkf-data-logic-svc
+# ioc-knowledge-memory-svc
 
 TKF Data Logic Service - FastAPI workspace, user, and API key management
 
