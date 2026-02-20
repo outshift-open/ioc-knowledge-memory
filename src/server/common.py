@@ -1,12 +1,13 @@
-import os
 import json
 import logging
+import os
+
 from cryptography.fernet import Fernet
 
 # Get logger instance (logging is setup in main.py)
 logger = logging.getLogger(__name__)
 
-service_name = os.environ.get("SERVICE_NAME", "ci-tkf-data-logic-svc")
+service_name = os.environ.get("SERVICE_NAME", "ioc-knowledge-memory-svc")
 
 
 def get_global_encryption_key() -> bytes:

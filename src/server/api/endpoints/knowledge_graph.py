@@ -1,4 +1,7 @@
-import json
+from fastapi import APIRouter, status, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
 from server.schemas.knowledge_graph import (
     KnowledgeGraphStoreRequest,
     KnowledgeGraphStoreResponse,
@@ -9,11 +12,6 @@ from server.schemas.knowledge_graph import (
     ResponseStatus,
 )
 from server.services.knowledge_graph import knowledge_graph_service
-from fastapi import APIRouter, HTTPException, status, Request
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
-from typing import Union
-from enum import Enum
 
 router = APIRouter()
 internal_router = APIRouter()

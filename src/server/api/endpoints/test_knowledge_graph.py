@@ -1,20 +1,21 @@
 """
-Tests for Knowledge Graph endpoints in ci-tkf-data-logic-svc.
+Tests for Knowledge Graph endpoints.
 """
-import pytest
-import json
+
 from unittest.mock import patch
+
+from fastapi import FastAPI
 from fastapi import status
+from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
+
 from server.api.endpoints.knowledge_graph import router, internal_router
+from server.api.endpoints.knowledge_graph import validation_exception_handler
 from server.schemas.knowledge_graph import (
     KnowledgeGraphStoreResponse,
     KnowledgeGraphDeleteResponse,
     KnowledgeGraphQueryResponse,
 )
-from fastapi import FastAPI
-from fastapi.exceptions import RequestValidationError
-from server.api.endpoints.knowledge_graph import validation_exception_handler
 
 # Create a test FastAPI app
 app = FastAPI()

@@ -2,8 +2,6 @@ services:
   ioc-graph-db:
     image: skaiworldwide/agensgraph:v2.16.0-alpine3.22
     platform: linux/amd64
-    profiles:
-      - db-only
     environment:
       POSTGRES_DB: ${AGENSGRAPH_DB:-ioc-graph-db}
       POSTGRES_USER: ${AGENSGRAPH_USER}
@@ -13,7 +11,7 @@ services:
     volumes:
       - agensgraph_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U $$POSTGRES_USER -d $$AGENSGRAPH_DB"]
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U ${AGENSGRAPH_USER} -d ${AGENSGRAPH_DB:-ioc-graph-db}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -24,86 +22,38 @@ services:
     environment:
       DB_HOST: ioc-graph-db
       DB_PORT: 5432
-      DB_USER: ${POSTGRES_USER}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_USER: ${AGENSGRAPH_USER}
+      DB_PASSWORD: ${AGENSGRAPH_PASSWORD}
       DB_NAME: ${AGENSGRAPH_DB:-ioc-graph-db}
     ports:
       - "${AGENSGRAPH_PORT_UI:-3000}:3000"
     depends_on:
       - ioc-graph-db
 
-  tkf-relational-db:
-    image: timescale/timescaledb-ha:pg17
-    profiles:
-      - db-only
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-tkf}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_INITDB_ARGS: "-c shared_preload_libraries=timescaledb"
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    volumes:
-      - timescaledb_data:/var/lib/timescaledb/data
-    healthcheck:
-      test:
-        ["CMD-SHELL", "pg_isready -d ${POSTGRES_DB:-tkf} -U ${POSTGRES_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  tkf-graph-vector-db:
-    image: neo4j:5.26-community
-    profiles:
-      - db-only
-    ports:
-      - "${NEO4J_PORT_HTTP:-7474}:7474" # HTTP (UI)
-      - "${NEO4J_PORT:-7687}:7687" # Bolt (driver)
-    environment:
-      - NEO4J_initial_dbms_default__database=${NEO4J_DATABASE:-tkf}
-      - NEO4J_AUTH=${NEO4J_USERNAME}/${NEO4J_PASSWORD}
-      - NEO4J_dbms_connector_http_listen__address=0.0.0.0:${NEO4J_PORT_HTTP:-7474}
-      - NEO4J_dbms_connector_bolt_listen__address=0.0.0.0:${NEO4J_PORT:-7687}
-      - NEO4J_dbms_memory_heap_initial__size=512m
-      - NEO4J_dbms_memory_heap_max__size=512m
-    volumes:
-      - neo4j_data:/data
-      - neo4j_logs:/logs
-    restart: unless-stopped
-    healthcheck:
-      test: wget -q -O /dev/null http://localhost:7474 || exit 1
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  ci-tkf-data-logic-svc:
+  ioc-knowledge-memory-svc:
     build:
       context: .
       dockerfile: Dockerfile
-    profiles:
-      - api
+      platforms:
+        - linux/arm64
     ports:
       - "8001:8001"
     environment:
-      - SERVICE_NAME=ci-tkf-data-logic-svc
+      - SERVICE_NAME=ioc-knowledge-memory-svc
       - APPLICATION_VERSION=dev
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - POSTGRES_HOST=tkf-relational-db
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=${POSTGRES_DB:-tkf}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - NEO4J_HOST=tkf-graph-vector-db
-      - NEO4J_PORT=7687
-      - NEO4J_DATABASE=${NEO4J_DATABASE:-tkf}
-      - NEO4J_USERNAME=${NEO4J_USERNAME}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - AGENSGRAPH_HOST=ioc-graph-db
+      - AGENSGRAPH_DB=${AGENSGRAPH_DB:-ioc-graph-db}
+      - AGENSGRAPH_USER=${AGENSGRAPH_USER}
+      - AGENSGRAPH_PASSWORD=${AGENSGRAPH_PASSWORD}
+      - AGENSGRAPH_PORT=5432
     restart: unless-stopped
     depends_on:
-      tkf-relational-db:
+      ioc-graph-db:
         condition: service_healthy
-      tkf-graph-vector-db:
-        condition: service_healthy
+      ioc-graph-db-viewer:
+        condition: service_started
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
@@ -112,7 +62,4 @@ services:
       start_period: 40s
 
 volumes:
-  timescaledb_data:
-  neo4j_data:
-  neo4j_logs:
   agensgraph_data:

@@ -234,47 +234,47 @@ jobs:
 
   ################################## Helm Publish #################################
   #################################################################################
-  call-helm-publish:
-    name: Helm publish
-    needs: [call-docker-build-push]
-    uses: cisco-eti/gh-reusable-workflows/.github/workflows/helm-publish.yaml@production
-    with:
-      runner-group: ${{ vars.DEFAULT_ARC_RUNNERS }}
-      enable-private-ecr: false
-      enable-public-ecr: false
-      chart-path: "deploy/charts/${{ github.event.repository.name }}"
-      #ecr-public-registry-alias: ${{ vars.ECR_PUBLIC_REGISTRY_ALIAS}}
-      enable-chartmuseum: true
-    secrets:
-      # GHCR Login for docker build runner
-      ghcr-username: ${{ secrets.GHCR_USERNAME }}
-      ghcr-token: ${{ secrets.GHCR_TOKEN }}
-      vault-approle-role-id: ${{ secrets.VAULT_APPROLE_ROLE_ID }}
-      vault-approle-secret-id: ${{ secrets.VAULT_APPROLE_SECRET_ID }}
+#  call-helm-publish:
+#    name: Helm publish
+#    needs: [call-docker-build-push]
+#    uses: cisco-eti/gh-reusable-workflows/.github/workflows/helm-publish.yaml@production
+#    with:
+#      runner-group: ${{ vars.DEFAULT_ARC_RUNNERS }}
+#      enable-private-ecr: false
+#      enable-public-ecr: false
+#      chart-path: "deploy/charts/${{ github.event.repository.name }}"
+#      #ecr-public-registry-alias: ${{ vars.ECR_PUBLIC_REGISTRY_ALIAS}}
+#      enable-chartmuseum: true
+#    secrets:
+#      # GHCR Login for docker build runner
+#      ghcr-username: ${{ secrets.GHCR_USERNAME }}
+#      ghcr-token: ${{ secrets.GHCR_TOKEN }}
+#      vault-approle-role-id: ${{ secrets.VAULT_APPROLE_ROLE_ID }}
+#      vault-approle-secret-id: ${{ secrets.VAULT_APPROLE_SECRET_ID }}
 
   ################################## Trigger Deployment ###########################
   #################################################################################
-  call-trigger-cd:
-    name: Trigger CD
-    needs: [call-helm-publish]
-    # Run only on main branch
-    # github.ref == 'refs/heads/main'
-    if: false
-    uses: cisco-eti/gh-reusable-workflows/.github/workflows/trigger-deploy.yaml@production
-    with:
-      deployment-repo: "${{ github.repository }}-deployment"
-      # Always we update "a" and "b" deployment values file, value is optional arg
-      client-payload: '{"app-repository": "${{ github.repository }}", "values-file-path": "applications/${{ github.event.repository.name }}", "property-path": "tagversion", "value": ""}'
-
-    secrets:
-      # GHCR Login for docker build runner
-      ghcr-username: ${{ secrets.GHCR_USERNAME }}
-      ghcr-token: ${{ secrets.GHCR_TOKEN }}
-      # GHCR Login for docker scan
-      ghcr-org-username: ${{ secrets.GHCR_USERNAME }}
-      ghcr-org-token: ${{ secrets.GHCR_TOKEN }}
-      vault-approle-role-id: ${{ secrets.VAULT_APPROLE_ROLE_ID }}
-      vault-approle-secret-id: ${{ secrets.VAULT_APPROLE_SECRET_ID }}
+#  call-trigger-cd:
+#    name: Trigger CD
+#    needs: [call-helm-publish]
+#    # Run only on main branch
+#    # github.ref == 'refs/heads/main'
+#    if: false
+#    uses: cisco-eti/gh-reusable-workflows/.github/workflows/trigger-deploy.yaml@production
+#    with:
+#      deployment-repo: "${{ github.repository }}-deployment"
+#      # Always we update "a" and "b" deployment values file, value is optional arg
+#      client-payload: '{"app-repository": "${{ github.repository }}", "values-file-path": "applications/${{ github.event.repository.name }}", "property-path": "tagversion", "value": ""}'
+#
+#    secrets:
+#      # GHCR Login for docker build runner
+#      ghcr-username: ${{ secrets.GHCR_USERNAME }}
+#      ghcr-token: ${{ secrets.GHCR_TOKEN }}
+#      # GHCR Login for docker scan
+#      ghcr-org-username: ${{ secrets.GHCR_USERNAME }}
+#      ghcr-org-token: ${{ secrets.GHCR_TOKEN }}
+#      vault-approle-role-id: ${{ secrets.VAULT_APPROLE_ROLE_ID }}
+#      vault-approle-secret-id: ${{ secrets.VAULT_APPROLE_SECRET_ID }}
 
   ################################## Send Status for PR Checks ###########################
   ########################################################################################

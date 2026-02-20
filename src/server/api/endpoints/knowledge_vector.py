@@ -1,5 +1,3 @@
-from server.schemas.tkf import TkfStoreRequest, TkfStoreResponse, TkfQueryRequest, TkfQueryResponse
-from server.schemas.tkf import TkfDeleteRequest, TkfDeleteResponse
 from fastapi import APIRouter, HTTPException, status
 
 router = APIRouter()

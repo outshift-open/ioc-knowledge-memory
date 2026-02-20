@@ -8,9 +8,8 @@ This script demonstrates basic graph operations using the GraphDB class:
 - Getting graph information
 - Deleting a graph
 """
-import os
-import sys
 import logging
+import sys
 from pathlib import Path
 
 from app_logging import setup_logging

@@ -1,6 +1,6 @@
 # ioc-knowledge-memory-svc
 
-TKF Data Logic Service - FastAPI workspace, user, and API key management
+ioc-knowledge-memory-svc - APIs for knowledge management
 
 ## Prerequisites
 
@@ -14,29 +14,9 @@ TKF Data Logic Service - FastAPI workspace, user, and API key management
   - **Manual install**: `sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b ~/.local/bin`
   - **All-in-one setup**: `./install.sh` (installs Poetry and Task globally, and dependencies)
 
-#### Dependencies for the Relational DB
-For details please refer to the [README](src/server/database/relational_db/README.md)
-- [TimescaleDB(Postgres17)](https://www.tigerdata.com/docs/self-hosted/latest/install/installation-docker)
-- [Atlas](https://atlasgo.io/guides/orms/sqlalchemy/getting-started)
-
 ## Quick Start
 
 ### Deployment Options
-
-**Option 1: I have deployed neo4j and sql DB locally**
-
-```bash
-task run    # installs deps, applies db migrations, generates DEK, then runs
-```
-
-**Option 2: I don't have any db**
-
-```bash
-task docker-compose-db-up    # Start only databases (PostgreSQL and Neo4j) with db-only profile
-task run                     # installs deps, applies db migrations, generates DEK, then runs
-```
-
-**Option 3: Full stack deployment**
 
 ```bash
 task docker-compose-up       # Start complete stack (application + databases)
@@ -58,7 +38,9 @@ poetry install
 task dev
 ```
 
-**API Documentation:** http://localhost:8001/docs
+**API Documentation:** 
+http://localhost:8001/docs
+http://localhost:8001/openapi.json
 
 ## Development
 
@@ -83,9 +65,3 @@ poetry run python main.py
 ```bash
 docker-compose up --build
 ```
-
-## API Endpoints
-
-- **Workspaces:** `GET|POST|PUT|DELETE /api/workspaces`
-- **Users:** `GET|POST|DELETE /api/workspaces/{workspace_id}/users`
-- **API Keys:** `GET|POST|DELETE /api/workspaces/{workspace_id}/api-keys`

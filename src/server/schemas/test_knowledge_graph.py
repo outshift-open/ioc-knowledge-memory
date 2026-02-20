@@ -1,5 +1,6 @@
 import pytest
 from pydantic import ValidationError
+
 from server.schemas.knowledge_graph import (
     ResponseStatus,
     EmbeddingConfig,
@@ -299,7 +300,8 @@ class TestKnowledgeGraphQueryCriteria:
     def test_query_criteria_defaults(self):
         """Test that KnowledgeGraphQueryCriteria has correct default values."""
         criteria = KnowledgeGraphQueryCriteria()
-        assert criteria.depth == 1
+        assert criteria.depth is None
+        assert criteria.use_direction is True
         assert criteria.query_type == QUERY_TYPE_NEIGHBOUR
 
     def test_query_criteria_custom_values(self):

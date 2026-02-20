@@ -1,9 +1,7 @@
-from typing import Dict, List, Any, Optional, Union
-from dataclasses import dataclass, field
-from uuid import uuid4
-import re
-import logging
 import json
+import logging
+from dataclasses import dataclass, field
+from typing import Dict, List, Any
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +175,37 @@ class Node:
             query = f"MATCH p = (start {{id: %s}})-[*1..{depth}]-(finish {{id: %s}}) RETURN p"
         else:
             query = "MATCH p = (start {id: %s})-[*]-(finish {id: %s}) RETURN p"
+
+        return query, (self.id, node_dst.id)
+
+    def to_cypher_path_query_with_direction(self, node_dst, depth: int = None) -> tuple[str, tuple]:
+        """Generate a Cypher query to find all directed paths from this node to a destination node.
+
+        Args:
+            node_dst: Destination Node object
+            depth: Maximum path depth/length (optional, if None no depth limit is applied)
+
+        The query will return all directed paths from the source to destination nodes,
+        following the direction of relationships. Uses directed relationship pattern (-[*]->).
+        If depth is specified, only paths within that depth limit are returned.
+
+        Returns:
+            tuple: (cypher_query, parameters_tuple) containing source_id and dest_id
+
+        Raises:
+            ValueError: Both nodes must have an ID for path queries
+        """
+        if not hasattr(self, "id") or self.id is None:
+            raise ValueError("Source node must have an ID for path queries")
+
+        if not hasattr(node_dst, "id") or node_dst.id is None:
+            raise ValueError("Destination node must have an ID for path queries")
+
+        # directed path query
+        if depth is not None:
+            query = f"MATCH p = (start {{id: %s}})-[*1..{depth}]->(finish {{id: %s}}) RETURN p"
+        else:
+            query = "MATCH p = (start {id: %s})-[*]->(finish {id: %s}) RETURN p"
 
         return query, (self.id, node_dst.id)
 

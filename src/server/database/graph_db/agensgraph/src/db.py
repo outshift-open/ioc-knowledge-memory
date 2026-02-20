@@ -1,11 +1,12 @@
-import os
 import logging
-import agensgraph
+import os
+
 from sqlalchemy import create_engine
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import QueuePool
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import QueuePool
+import agensgraph
 
 # Used when environment variables are not configured
 AGENSGRAPH_DB_DEFAULT = "ioc-graph-db"
@@ -400,7 +401,7 @@ class GraphDB:
                                 error_msg.append(f"Nodes already exist with IDs: {', '.join(existing_nodes)}")
                             if existing_edges:
                                 error_msg.append(f"Edges already exist with IDs: {', '.join(existing_edges)}")
-                            error_msg.append("Use force_replace=True to recreate")
+                            error_msg.append(f"Use force_replace=True to recreate in graph:{graph}.")
                             # Raise exception to trigger rollback
                             raise ValueError(". ".join(error_msg))
 
@@ -530,7 +531,7 @@ class GraphDB:
 
                 # For concept queries, we only return the node with empty edges
                 results.append({"edges": [], "nodes": node_data})
-                msg = f"Successfully queried:{node.id}"
+                msg = f"Successfully queried:{node.id} in graph:{graph}."
 
             return True, results, msg
         except Exception as e:
@@ -576,13 +577,13 @@ class GraphDB:
 
                 if not result:
                     self.logger.warning(f"No results found for node {node.id}")
-                    msg = f"No neighbors found for:{node.id}"
+                    msg = f"No neighbors found for:{node.id} in graph:{graph}."
                 else:
                     # Extract the neighbor relationships and concepts
                     relationships = [dict(rel) for rel in result[1]] if result[1] else []  # All relationships
                     neighbors = [dict(n) for n in result[2]] if result[2] else []  # All neighbor nodes
                     results.append({"edges": relationships, "nodes": neighbors})
-                    msg = f"Successfully queried neighbours for:{node.id}"
+                    msg = f"Successfully queried neighbours for:{node.id} in graph:{graph}."
 
             return True, results, msg
 
@@ -591,7 +592,9 @@ class GraphDB:
             self.logger.error(error_msg, exc_info=True)
             return False, [], error_msg
 
-    def query_type_path(self, graph: str, nodes: list, depth: int = None) -> tuple[bool, list, str]:
+    def query_type_path(
+        self, graph: str, nodes: list, depth: int = None, use_direction: bool = True
+    ) -> tuple[bool, list, str]:
         """
         Query the graph database for paths between given nodes.
 
@@ -599,6 +602,7 @@ class GraphDB:
             graph: Graph name
             nodes: List of Node objects to be used for querying
             depth: Maximum path depth/length (optional, if None no depth limit is applied)
+            use_direction: Whether to use directed relationships in path queries
 
         Returns:
             Tuple containing (success: bool, results: list, msg: str)
@@ -632,7 +636,10 @@ class GraphDB:
                     self.logger.warning(f"Node {node_dst.id} does not exist")
                     return False, [], f"Node {node_dst.id} does not exist"
 
-                query, params = node_src.to_cypher_path_query(node_dst, depth)
+                if use_direction:
+                    query, params = node_src.to_cypher_path_query_with_direction(node_dst, depth)
+                else:
+                    query, params = node_src.to_cypher_path_query(node_dst, depth)
                 self.logger.info(f"Executing path query: {node_src.to_executable_cypher_with_params(query, params)}")
 
                 # Fetch all paths, using provided query criteria
@@ -641,7 +648,7 @@ class GraphDB:
 
                 if not path_results:
                     self.logger.warning(f"No paths found between {node_src.id} and {node_dst.id}")
-                    msg = f"No paths found between {node_src.id} and {node_dst.id}"
+                    msg = f"No paths found between {node_src.id} and {node_dst.id} in graph:{graph}."
                 else:
                     # Process each path using AgensGraph Path object
                     for i, row in enumerate(path_results):
@@ -691,7 +698,7 @@ class GraphDB:
                         )
 
                     total_paths = len(path_results)
-                    msg = f"Found {total_paths} path(s) between:{node_src.id} and {node_dst.id}."
+                    msg = f"Found {total_paths} path(s) between:{node_src.id} and {node_dst.id} in graph:{graph}."
 
             return True, results, msg
 

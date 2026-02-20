@@ -12,20 +12,10 @@ vars:
 
 tasks:
   deps:
-    desc: Install all dependencies (Python and Atlas)
+    desc: Install all dependencies
     cmds:
-      - task: install-atlas
       - task: install-poetry
     silent: false
-
-  install-atlas:
-    desc: Install Atlas migration tool to bin directory
-    cmds:
-      - mkdir -p {{.BIN_DIR}}
-      - curl -sSf https://atlasgo.sh | sh -s -- --no-install -o {{.BIN_DIR}}/atlasgo -y
-      - chmod +x {{.BIN_DIR}}/atlasgo
-    status:
-      - '[ -f "{{.BIN_DIR}}/atlasgo" ]'
 
   install-poetry:
     desc: Install Python dependencies using Poetry
@@ -42,11 +32,6 @@ tasks:
     cmds:
       - poetry lock
 
-  generate-dek:
-    desc: Generate Data Encryption Key (DEK) and save to config.json
-    cmds:
-      - poetry run python scripts/generate_DEK.py
-
   dev:
     desc: Start development server with hot reload
     cmds:
@@ -54,12 +39,9 @@ tasks:
     dir: "{{.SRC_DIR}}"
 
   run:
-    desc: Start production server (installs deps, applies db migrations, generates DEK, then runs)
+    desc: Start production server (installs deps, then runs)
     cmds:
       - task: deps
-      - task: db-migrate-apply
-      - task: db-seed
-      - task: generate-dek
       - poetry run python -m server.main
     dir: "{{.SRC_DIR}}"
 
@@ -71,22 +53,7 @@ tasks:
   test-coverage:
     desc: Run tests with coverage report
     cmds:
-      - poetry run pytest tests/ --cov=server --cov-report=term-missing
-
-  test-workspaces:
-    desc: Run only workspace tests
-    cmds:
-      - poetry run pytest tests/test_workspaces.py -v
-
-  test-users:
-    desc: Run only user tests
-    cmds:
-      - poetry run pytest tests/test_users.py -v
-
-  test-api-keys:
-    desc: Run only API key tests
-    cmds:
-      - poetry run pytest tests/test_api_keys.py -v
+      - poetry run pytest src/ --cov=server --cov-report=term-missing
 
   lint-check:
     desc: Run linting checks
@@ -113,69 +80,27 @@ tasks:
           --build-arg GIT_COMMIT_TIME=$(git log -1 --format=%cI) \
           --build-arg GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD) \
           --no-cache \
-          -t ci-tkf-data-logic-svc:latest .
+          -t ioc-knowledge-memory-svc:latest .
 
   docker-run:
     desc: Run Docker container
     cmds:
-      - docker run -p 8001:8001 ci-tkf-data-logic-svc:latest
+      - docker run -p 8001:8001 ioc-knowledge-memory-svc:latest
 
   docker-compose-up:
     desc: Start all services with docker-compose
     cmds:
-      - docker compose --env-file .env --profile db-only --profile api up --build
+      - docker compose --env-file .env up --build
 
   docker-compose-down:
     desc: Stop all services with docker-compose
     cmds:
-      - docker compose --env-file .env --profile db-only --profile api down
+      - docker compose --env-file .env down
 
-  docker-compose-db-up:
-    desc: Start only databases with db-only profile
+  docker-compose-down-with-volumes:
+    desc: Stop and remove volumes
     cmds:
-      - docker compose --env-file .env --profile db-only up -d
-
-  docker-compose-db-down:
-    desc: Stop only databases with db-only profile
-    cmds:
-      - docker compose --env-file .env --profile db-only down
-
-  docker-compose-db-down-with-volumes:
-    desc: Stop databases and remove volumes with db-only profile
-    cmds:
-      - docker compose --env-file .env --profile db-only down -v
-
-  # Database migration tasks
-  db-migrate-apply:
-    desc: Apply pending database migrations
-    cmds:
-      - '{{.BIN_DIR}}/atlasgo migrate apply --dir "file://migrations" --env local'
-    dir: "src/server/database/relational_db"
-
-  db-migrate-status:
-    desc: Show database migration status
-    cmds:
-      - /usr/local/bin/atlasgo migrate status --dir "file://migrations" --env local
-    dir: "src/server/database/relational_db"
-
-  db-migrate-new:
-    desc: Create a new migration which will be placed in migrations folder (provide name as argument)
-    # task db-migrate-new -- "msg_for_migration"
-    cmds:
-      - /usr/local/bin/atlasgo migrate diff {{.CLI_ARGS}} --dir "file://migrations" --env local
-    dir: "src/server/database/relational_db"
-
-  db-migrate-hash:
-    desc: Rehash migration files to update checksums
-    cmds:
-      - /usr/local/bin/atlasgo migrate hash --dir "file://migrations"
-    dir: "src/server/database/relational_db"
-
-  db-seed:
-    desc: Seed the database with initial data
-    cmds:
-      - poetry run psql postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:5455/tkf -f scripts/populate_software.sql
-    dir: "{{.SRC_DIR}}/server/database/relational_db"
+      - docker compose --env-file .env down -v
 
   help:
     desc: Show available tasks

@@ -1,8 +1,6 @@
 import pytest
-from unittest.mock import patch, MagicMock
+
 from server.adapters.adapter_graphdb_agensgraph import AdapterGraphdbAgensgraph
-from server.database.graph_db.agensgraph.models.node import Node
-from server.database.graph_db.agensgraph.models.edge import Edge
 
 
 class TestAdapterGraphdbAgensgraph:
@@ -196,7 +194,7 @@ class TestAdapterGraphdbAgensgraph:
                         "id": "rel1",
                         "node_ids": ["node1", "node2"],
                         "relation": "RELATED_TO",
-                        "attributes": {"strength": 0.8}
+                        "attributes": {"strength": 0.8},
                         # No embeddings
                     }
                 ]
@@ -221,7 +219,7 @@ class TestAdapterGraphdbAgensgraph:
                     {
                         "id": "rel1",
                         "node_ids": ["node1", "node2"],
-                        "relation": "RELATED_TO"
+                        "relation": "RELATED_TO",
                         # No attributes
                     }
                 ]

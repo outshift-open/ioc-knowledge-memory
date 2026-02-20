@@ -36,7 +36,7 @@ class LogLevelUpdate(BaseModel):
 # TKF Standard Diagnostic API Endpoints
 ################################################
 @app.get("/api/internal/diagnostics/health")
-async def tkf_health():
+async def health():
     """TKF standard health endpoint for liveness probe.
 
     Returns a simple status for k8s liveness probe and also includes
@@ -65,7 +65,7 @@ async def tkf_health():
 
 
 @app.get("/api/internal/diagnostics/info")
-async def tkf_info():
+async def info():
     """TKF standard info endpoint with git commit information.
 
     Returns:

@@ -1,6 +1,6 @@
 FROM ghcr.io/cisco-eti/sre-python-docker:v3.11.9-hardened-debian-12
 
-# Install curl for health checks, wget for atlas installation, postgresql-client for database seeding
+# Install curl for health checks, wget, postgresql-client
 # AND build dependencies for agensgraph-python and other packages that may need compilation
 RUN apt-get update && apt-get install -y curl wget postgresql-client build-essential libpq-dev && rm -rf /var/lib/apt/lists/*
 
@@ -19,12 +19,6 @@ RUN pip3 install poetry
 RUN poetry config virtualenvs.create false
 RUN poetry install --only=main --no-root
 
-# Install Atlas binary for migrations
-RUN mkdir -p /home/app/bin && \
-    curl -sSf https://atlasgo.sh | sh -s -- --no-install -o /home/app/bin/atlasgo -y && \
-    chmod +x /home/app/bin/atlasgo && \
-    chown -R app:app /home/app/bin
-
 # Copy application source and scripts
 COPY --chown=app:app src/ ./src/
 COPY --chown=app:app scripts/ ./scripts/
@@ -39,5 +33,5 @@ USER app
 ENV PYTHONPATH="/home/app/src"
 ENV PATH="/home/app/bin:/home/app/.local/bin:$PATH"
 
-# Use entrypoint script to run migrations, generate DEK, then start server
+# Use entrypoint script to run initializations if required, then start server
 ENTRYPOINT ["/home/app/docker-entrypoint.sh"]

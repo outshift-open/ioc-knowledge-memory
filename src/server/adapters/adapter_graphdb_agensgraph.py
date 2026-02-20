@@ -1,11 +1,10 @@
+import json
 import logging
 from typing import Tuple, List, Dict, Any
 
-from server.schemas.knowledge_graph import EmbeddingConfig
-import json
-
-from server.database.graph_db.agensgraph.models.node import Node
 from server.database.graph_db.agensgraph.models.edge import Edge
+from server.database.graph_db.agensgraph.models.node import Node
+from server.schemas.knowledge_graph import EmbeddingConfig
 from server.schemas.knowledge_graph import KnowledgeGraphQueryResponseRecord, Concept, Relation
 
 

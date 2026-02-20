@@ -53,29 +53,6 @@ paths:
                     type: string
                     example: "healthy"
 
-  /env:
-    get:
-      tags:
-        - health
-      summary: Environment variables endpoint
-      description: Returns service information and environment variables
-      operationId: getEnvironment
-      responses:
-        '200':
-          description: Environment information
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  service:
-                    type: string
-                    example: "ci-tkf-data-logic-svc"
-                  environment_variables:
-                    type: object
-                    additionalProperties:
-                      type: string
-
   # Knowledge Graph endpoints
   /knowledge/graphs:
     post:
@@ -595,9 +572,14 @@ components:
         depth:
           type: integer
           minimum: 1
-          default: 1
+          nullable: true
           description: Depth of the query (number of hops) to be used for path queries
           example: 2
+        use_direction:
+          type: boolean
+          default: true
+          description: Whether to use directed relationships in path queries
+          example: true
         query_type:
           type: string
           enum:

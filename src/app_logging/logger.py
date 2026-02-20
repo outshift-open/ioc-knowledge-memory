@@ -5,7 +5,6 @@ Provides functions for initializing logging, querying logger states,
 and updating log levels dynamically at runtime.
 """
 
-
 import logging
 import os
 import tomllib

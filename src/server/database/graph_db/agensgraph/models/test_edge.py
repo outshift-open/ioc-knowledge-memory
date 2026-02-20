@@ -1,4 +1,5 @@
 import pytest
+
 from server.database.graph_db.agensgraph.models.edge import Edge
 
 

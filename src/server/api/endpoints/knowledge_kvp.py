@@ -1,10 +1,4 @@
-from server.schemas.tkf import TkfStoreRequest, TkfStoreResponse, TkfQueryRequest, TkfQueryResponse
-from server.schemas.tkf import TkfDeleteRequest, TkfDeleteResponse
-
-# from server.services.knowledge_kvp import knowledge_kvp_service
 from fastapi import APIRouter, HTTPException, status
-from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
 
 router = APIRouter()
 internal_router = APIRouter()

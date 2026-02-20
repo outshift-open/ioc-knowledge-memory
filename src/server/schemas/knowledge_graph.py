@@ -1,7 +1,8 @@
-from typing import Dict, List, Literal, Optional, Any, Annotated
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator, computed_field, BeforeValidator
-from uuid import UUID, uuid4
 from enum import Enum
+from typing import Dict, List, Literal, Optional, Any, Annotated
+from uuid import uuid4
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class ResponseStatus(str, Enum):
@@ -280,7 +281,10 @@ QUERY_TYPE_CONCEPT = "concept"
 
 class KnowledgeGraphQueryCriteria(BaseModel):
     depth: Optional[int] = Field(
-        default=1, description="Depth of the query (number of hops) to be used for path queries"
+        default=None, description="Depth of the query (number of hops) to be used for path queries"
+    )
+    use_direction: Optional[bool] = Field(
+        default=True, description="Whether to use directed relationships in path queries"
     )
     query_type: str = Field(default=QUERY_TYPE_NEIGHBOUR, description="Type of query to execute")
 

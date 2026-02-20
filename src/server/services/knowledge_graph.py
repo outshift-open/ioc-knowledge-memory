@@ -1,5 +1,7 @@
 import logging
 
+from server.adapters.adapter_graphdb_agensgraph import AdapterGraphdbAgensgraph
+from server.database.graph_db.agensgraph.src.db import GraphDB
 from server.schemas.knowledge_graph import (
     KnowledgeGraphStoreRequest,
     KnowledgeGraphStoreResponse,
@@ -12,9 +14,6 @@ from server.schemas.knowledge_graph import (
     QUERY_TYPE_CONCEPT,
     ResponseStatus,
 )
-
-from server.adapters.adapter_graphdb_agensgraph import AdapterGraphdbAgensgraph
-from server.database.graph_db.agensgraph.src.db import GraphDB
 
 
 class KnowledgeGraphService:
@@ -131,7 +130,12 @@ class KnowledgeGraphService:
 
             if query_type == QUERY_TYPE_PATH:
                 self.logger.info(f"Querying path: {nodes}")
-                success, results, msg = db.query_type_path(graph=graph, nodes=nodes, depth=data.query_criteria.depth)
+                success, results, msg = db.query_type_path(
+                    graph=graph,
+                    nodes=nodes,
+                    depth=data.query_criteria.depth,
+                    use_direction=data.query_criteria.use_direction,
+                )
             elif query_type == QUERY_TYPE_NEIGHBOUR:
                 self.logger.info(f"Querying neighbor: {nodes}")
                 success, results, msg = db.query_type_neighbor(graph=graph, nodes=nodes)

@@ -1,20 +1,18 @@
 import logging
 import os
 from contextlib import asynccontextmanager
+
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
+
+from app_logging.logger import setup_logging
 from server.api.api import api_router
 from server.api.exception_handlers import validation_exception_handler
-from server.database.relational_db.db import RelationalDB
-from server.database.graph_db.neo4j.src.db_async import GraphDB
-from server.database.graph_db.agensgraph.src.db import GraphDB as AgensGraphDB
-
 from server.common import service_name
-from server.services.user import UserService
-from app_logging.logger import setup_logging
-from fastapi.exceptions import RequestValidationError
+from server.database.graph_db.agensgraph.src.db import GraphDB as AgensGraphDB
 
 # Load environment variables from .env file in current or parent directories
 load_dotenv(override=True)
@@ -30,18 +28,7 @@ logger.info("Environment variables loaded")
 async def lifespan(app: FastAPI):
     """Manage application lifespan events."""
 
-    # Database Setup
     try:
-        db = RelationalDB()
-        db.init()
-    except Exception as e:
-        logger.error(f"Relational Database initialization failed: {str(e)}")
-        raise
-
-    try:
-        graph_db = GraphDB()
-        await graph_db.init()
-
         agensgraph_db = AgensGraphDB()
         agensgraph_db.init()
 
@@ -51,20 +38,11 @@ async def lifespan(app: FastAPI):
 
     logger.info("Database connections initialized")
 
-    # Application Setup
-    try:
-        UserService().create_admin_user()
-    except Exception as e:
-        logger.error(f"Admin user creation failed: {str(e)}")
-        raise
-
     yield
 
     # Shutdown
     logger.info("Closing database connection...")
-    db.close()
     agensgraph_db.close()
-    await graph_db.close()
     logger.info("Database connection closed")
 
 
@@ -94,21 +72,6 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 @app.get("/health")
 def health():
     return {"status": "healthy"}
-
-
-@app.get("/env")
-def env_var():
-    return {
-        "service": "ci-tkf-data-logic-svc",
-        "environment_variables": {
-            "CONFIGMAP_TEST": os.environ.get("CONFIGMAP_TEST"),
-            "CONFIGMAP_DEFAULT_EXAMPLE": os.environ.get("CONFIGMAP_DEFAULT_EXAMPLE"),
-            "CONFIGMAP_OVERLAY_EXAMPLE": os.environ.get("CONFIGMAP_OVERLAY_EXAMPLE"),
-            "APPLICATION_VERSION": os.environ.get("APPLICATION_VERSION"),
-            "MOCK_DB_UPTIME": os.environ.get("MOCK_DB_UPTIME"),
-            "MOCK_FOO_UPTIME": os.environ.get("MOCK_FOO_UPTIME"),
-        },
-    }
 
 
 ################################################
