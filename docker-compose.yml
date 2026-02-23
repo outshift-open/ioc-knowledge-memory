@@ -26,7 +26,7 @@ services:
       DB_PASSWORD: ${AGENSGRAPH_PASSWORD}
       DB_NAME: ${AGENSGRAPH_DB:-ioc-graph-db}
     ports:
-      - "${AGENSGRAPH_PORT_UI:-3000}:3000"
+      - "${AGENSGRAPH_PORT_UI:-5457}:3000"
     depends_on:
       - ioc-graph-db
 
@@ -37,7 +37,7 @@ services:
       platforms:
         - linux/arm64
     ports:
-      - "8001:8001"
+      - "9003:9003"
     environment:
       - SERVICE_NAME=ioc-knowledge-memory-svc
       - APPLICATION_VERSION=dev
@@ -55,7 +55,7 @@ services:
         condition: service_started
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9003/health"]
       interval: 30s
       timeout: 10s
       retries: 3

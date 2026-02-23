@@ -35,7 +35,7 @@ tasks:
   dev:
     desc: Start development server with hot reload
     cmds:
-      - poetry run uvicorn server.main:app --host 0.0.0.0 --port 8001 --reload
+      - poetry run uvicorn server.main:app --host 0.0.0.0 --port 9003 --reload
     dir: "{{.SRC_DIR}}"
 
   run:
@@ -85,7 +85,7 @@ tasks:
   docker-run:
     desc: Run Docker container
     cmds:
-      - docker run -p 8001:8001 ioc-knowledge-memory-svc:latest
+      - docker run -p 9003:9003 ioc-knowledge-memory-svc:latest
 
   docker-compose-up:
     desc: Start all services with docker-compose

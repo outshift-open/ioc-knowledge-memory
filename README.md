@@ -38,9 +38,9 @@ poetry install
 task dev
 ```
 
-**API Documentation:** 
-http://localhost:8001/docs
-http://localhost:8001/openapi.json
+**API Documentation:**
+http://localhost:9003/docs
+http://localhost:9003/openapi.json
 
 ## Development
 
