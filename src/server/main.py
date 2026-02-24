@@ -1,7 +1,9 @@
 import logging
 import os
+import uuid
 from contextlib import asynccontextmanager
 
+import requests
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -24,11 +26,47 @@ logger = logging.getLogger(__name__)
 logger.info("Environment variables loaded")
 
 
+def register_provider():
+    """Register this service as a memory provider."""
+    svc_url = os.environ.get("MEMORY_PROVIDER_REGISTRATION_URL")
+    if not svc_url:
+        logger.error("MEMORY_PROVIDER_REGISTRATION_URL environment variable not set")
+        raise ValueError("MEMORY_PROVIDER_REGISTRATION_URL environment variable is required")
+    
+    # Prepare the request payload
+    payload = {
+        "memory_provider_name": "ioc-memory-provider"
+    }
+    
+    # Make the POST request
+    url = f"{svc_url.rstrip('/')}/api/memory-providers"
+    
+    try:
+        response = requests.post(url, json=payload, timeout=30)
+        if response.status_code == 201:
+            logger.info(f"Memory provider registered successfully, Response Body: {response.text}")
+        elif response.status_code == 409:
+            logger.info(f"Memory provider already registered, Response Body: {response.text}")
+        else:
+            error_msg = f"Unexpected response status: {response.status_code}, body: {response.text}"
+            logger.error(error_msg)
+            raise Exception(error_msg)
+            
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Memory Provider Registration failed: {str(e)}"
+        logger.error(error_msg)
+        raise Exception(error_msg)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan events."""
 
     try:
+        # Register as memory-provider
+        register_provider()
+        
+        # Initialize graph database
         agensgraph_db = AgensGraphDB()
         agensgraph_db.init()
 
