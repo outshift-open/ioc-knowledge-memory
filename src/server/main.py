@@ -35,7 +35,11 @@ def register_provider():
     
     # Prepare the request payload
     payload = {
-        "memory_provider_name": "ioc-memory-provider"
+        "memory_provider_name": "ioc-memory-provider",
+        "config": {
+            "host": os.environ.get("SERVICE_NAME", "ioc-knowledge-memory-svc"),
+            "port": os.environ.get("PORT", "9003"),
+        }
     }
     
     # Make the POST request
