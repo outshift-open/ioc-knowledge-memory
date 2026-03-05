@@ -1,0 +1,26 @@
+services:
+  ioc-knowledge-db:
+    build:
+      context: ./docker-db
+      no_cache: true
+      platforms:
+      - linux/amd64
+    container_name: ioc-knowledge-db
+    environment:
+      POSTGRES_USER: ${IOC_KNOWLEDGE_DB_USER}
+      POSTGRES_PASSWORD: ${IOC_KNOWLEDGE_DB_PASSWORD}
+      POSTGRES_DB: ${IOC_KNOWLEDGE_DB:-ioc-knowledge-db}
+    ports:
+      - "${IOC_KNOWLEDGE_DB_PORT:-5456}:5432"
+    volumes:
+      - ioc_knowledge_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U ${IOC_KNOWLEDGE_DB_USER} -d ${IOC_KNOWLEDGE_DB:-ioc-knowledge-db}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  ioc_knowledge_db_data:
+  

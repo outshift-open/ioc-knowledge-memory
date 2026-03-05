@@ -20,13 +20,13 @@ tags:
   - name: knowledge-graph
     description: Graph-based knowledge storage and querying operations
   - name: knowledge-vector
-    description: Vector-based knowledge storage and querying operations (not implemented)
+    description: Vector-based knowledge storage and querying operations
   - name: knowledge-kvp
     description: Key-value pair knowledge storage and querying operations (not implemented)
   - name: internal-knowledge-graph
     description: Internal graph-based knowledge operations
   - name: internal-knowledge-vector
-    description: Internal vector-based knowledge operations (not implemented)
+    description: Internal vector-based knowledge operations
   - name: internal-knowledge-kvp
     description: Internal key-value pair knowledge operations (not implemented)
   - name: health
@@ -189,6 +189,54 @@ paths:
                 status: "failure"
                 message: "Query execution failed - database timeout or connection error"
 
+  # Internal Knowledge Vector endpoints
+  /internal/knowledge/vectors/stores/{store_id}:
+    delete:
+      tags:
+        - internal-knowledge-vector
+      summary: Internal Delete Vector Store
+      description: Internal method to hard delete a vector store schema and all associated data
+      operationId: internal_delete_vector_store
+      parameters:
+        - name: store_id
+          in: path
+          required: true
+          description: Unique identifier for the vector store
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeVectorStoreOnboardDeleteRequest'
+      responses:
+        '200':
+          description: Knowledge graph data successfully deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorStoreOnboardDeleteResponse'
+        '400':
+          description: Bad request - validation error (missing required fields, invalid data format, or business logic validation failure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorStoreOnboardDeleteResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorStoreOnboardDeleteResponse'
+        '500':
+          description: Internal server error - unexpected system failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorStoreOnboardDeleteResponse'
+
   # Internal Knowledge Graph endpoints
   /internal/knowledge/graphs:
     delete:
@@ -231,37 +279,77 @@ paths:
                 status: "failure"
                 message: "Internal service error - unable to process delete request"
 
-  # Knowledge Vector endpoints (not implemented)
-  /knowledge/vectors:
+  # Knowledge Vector endpoints
+  /knowledge/vectors/stores/{store_id}:
     post:
       tags:
         - knowledge-vector
-      summary: Create or update vector knowledge store
-      description: Vector knowledge store creation (not yet implemented)
-      operationId: createVectorStore
+      summary: Onboard Vector Store
+      description: Creates essential entities for the vector store to function and provides partitioning by workspace.
+      operationId: onboard_store
+      parameters:
+        - name: store_id
+          in: path
+          required: true
+          description: Unique identifier for the vector store
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeVectorStoreOnboardRequest'
       responses:
-        '501':
-          description: Not implemented
+        '201':
+          description: Knowledge vector store onboarded successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
-                    example: "Vector knowledge store creation is not yet implemented"
+                $ref: '#/components/schemas/KnowledgeVectorStoreOnboardResponse'
+        '400':
+          description: Bad request - validation error (missing required fields, invalid data format, or business logic validation failure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorStoreOnboardResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorStoreOnboardResponse'
         '500':
-          description: Internal server error
+          description: Internal server error - unexpected system failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorStoreOnboardResponse'
 
     delete:
       tags:
         - knowledge-vector
-      summary: Delete vector knowledge store
-      description: Vector knowledge store deletion (not yet implemented)
-      operationId: deleteVectorStore
+      summary: Delete Vector Store (Not Implemented)
+      description: Delete a partition of the vector knowledge store and associated entities created during onboarding of the store. Currently supported as an internal API only.
+      operationId: onboard_store_delete
+      parameters:
+        - name: store_id
+          in: path
+          required: true
+          description: Unique identifier for the vector store
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeVectorStoreOnboardDeleteRequest'
       responses:
         '501':
-          description: Not implemented
+          description: Not implemented - Vector knowledge store deletion is currently supported as an internal API
           content:
             application/json:
               schema:
@@ -269,30 +357,173 @@ paths:
                 properties:
                   detail:
                     type: string
-                    example: "Vector knowledge store deletion is not yet implemented"
+                    example: "Vector knowledge store deletion is currently supported as an *internal API*"
+
+  /knowledge/vectors:
+    post:
+      tags:
+        - knowledge-vector
+      summary: Upsert Vector Data
+      description: Upsert entity in the vector knowledge store. Either all records are upserted or none (runs as a transaction).
+      operationId: upsert_vector_store
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeVectorStoreRequest'
+      responses:
+        '201':
+          description: Knowledge vector data successfully created/updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorStoreResponse'
+        '400':
+          description: Bad request - validation error (missing required fields, invalid data format, or business logic validation failure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorStoreResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorStoreResponse'
         '500':
-          description: Internal server error
+          description: Internal server error - unexpected system failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorStoreResponse'
+
+    delete:
+      tags:
+        - knowledge-vector
+      summary: Delete Vector Entity
+      description: Delete an entity from the vector knowledge store
+      operationId: delete_vector_store
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeVectorDeleteRequest'
+      responses:
+        '200':
+          description: Knowledge graph data successfully deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorDeleteResponse'
+        '400':
+          description: Bad request - validation error (missing required fields, invalid data format, or business logic validation failure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorDeleteResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorDeleteResponse'
+        '500':
+          description: Internal server error - unexpected system failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorDeleteResponse'
 
   /knowledge/vectors/query:
     post:
       tags:
         - knowledge-vector
-      summary: Query vector knowledge store
-      description: Vector knowledge store querying (not yet implemented)
-      operationId: queryVectorStore
+      summary: Query Vector Store
+      description: Query entities from the vector knowledge store using various query types including similarity search
+      operationId: query_vector_store
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeVectorQueryRequest'
+            examples:
+              list_by_workspace:
+                summary: List all vectors by workspace
+                value:
+                  request_id: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+                  wksp_id: "9f136aa0-143c-46a6-82f2-249eac489e52"
+                  mas_id: "223e4567-e89b-12d3-a456-426614174001"
+                  query_criteria:
+                    query_type: "list_by_wksp_id"
+                    limit: 10
+              list_by_mas:
+                summary: List all vectors by MAS
+                value:
+                  request_id: "cbc2fea0-5e6c-4cf9-b7b4-fe6418c041a1"
+                  wksp_id: "9f136aa0-143c-46a6-82f2-249eac489e52"
+                  mas_id: "223e4567-e89b-12d3-a456-426614174001"
+                  query_criteria:
+                    query_type: "list_by_mas_id"
+                    limit: 5
+              get_by_id:
+                summary: Get specific vector by ID
+                value:
+                  request_id: "dbc2fea0-5e6c-4cf9-b7b4-fe6418c041a2"
+                  wksp_id: "9f136aa0-143c-46a6-82f2-249eac489e52"
+                  mas_id: "223e4567-e89b-12d3-a456-426614174001"
+                  query_criteria:
+                    query_type: "get_by_id"
+                    id: "123e4567-e89b-12d3-a456-426614174001"
+              l2_distance:
+                summary: L2 distance similarity search
+                value:
+                  request_id: "ebc2fea0-5e6c-4cf9-b7b4-fe6418c041a3"
+                  wksp_id: "9f136aa0-143c-46a6-82f2-249eac489e52"
+                  mas_id: "223e4567-e89b-12d3-a456-426614174001"
+                  query_criteria:
+                    query_type: "distance_l2"
+                    embedding:
+                      data: [0.1, 0.2, 0.3]
+                    limit: 5
+              cosine_similarity:
+                summary: Cosine similarity search
+                value:
+                  request_id: "fbc2fea0-5e6c-4cf9-b7b4-fe6418c041a4"
+                  wksp_id: "9f136aa0-143c-46a6-82f2-249eac489e52"
+                  mas_id: "223e4567-e89b-12d3-a456-426614174001"
+                  query_criteria:
+                    query_type: "distance_cosine"
+                    embedding:
+                      data: [0.4, 0.5, 0.6]
+                    limit: 3
       responses:
-        '501':
-          description: Not implemented
+        '200':
+          description: Query executed successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
-                    example: "Vector knowledge store querying is not yet implemented"
+                $ref: '#/components/schemas/KnowledgeVectorQueryResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorQueryResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorQueryResponse'
         '500':
-          description: Internal server error
+          description: Internal server error - unexpected system failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeVectorQueryResponse'
 
   # Knowledge KVP endpoints (not implemented)
   /knowledge/kvps:
@@ -384,7 +615,7 @@ components:
           description: Embedding vector data
           example: [0.1, 0.2, 0.3, -0.1, 0.5]
       required:
-        - name
+        - data
 
     Concept:
       type: object
@@ -680,6 +911,288 @@ components:
       required:
         - status
 
+
+    KnowledgeVectorStoreOnboardRequest:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: Auto-generated UUID for request tracking used if not passed in request
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+      description: Request to setup the Vector store for storing and managing knowledge vector data
+
+    KnowledgeVectorStoreOnboardResponse:
+      type: object
+      required:
+        - status
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: UUID for request tracking
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        status:
+          $ref: '#/components/schemas/ResponseStatus'
+        message:
+          type: string
+          description: Optional message providing additional information
+          example: "Vector store onboarded successfully"
+      description: Response from the create Container request
+
+    KnowledgeVectorStoreOnboardDeleteRequest:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: Auto-generated UUID for request tracking used if not passed in request
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+      description: Request to delete the Container used for storing and managing knowledge vector data
+
+    KnowledgeVectorStoreOnboardDeleteResponse:
+      type: object
+      required:
+        - status
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: UUID for request tracking
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        status:
+          $ref: '#/components/schemas/ResponseStatus'
+        message:
+          type: string
+          description: Optional message providing additional information
+          example: "Vector store deleted successfully"
+      description: Response from the delete Container request
+
+    KnowledgeVectorStoreRequestRecord:
+      type: object
+      required:
+        - id
+        - content
+        - embedding
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier
+          example: "123e4567-e89b-12d3-a456-426614174001"
+        content:
+          type: string
+          description: Content in plain text
+          example: "This is sample content for vector storage"
+        embedding:
+          $ref: '#/components/schemas/EmbeddingConfig'
+      description: Represents a vector in the knowledge vector store
+
+    KnowledgeVectorStoreRequest:
+      type: object
+      required:
+        - wksp_id
+        - mas_id
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: Auto-generated UUID for request tracking used if not passed in request
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        wksp_id:
+          type: string
+          minLength: 1
+          description: ID for the Multi-Agent System Workspace
+          example: "123e4567-e89b-12d3-a456-426614174001"
+        mas_id:
+          type: string
+          minLength: 1
+          description: ID for the Multi-Agent System
+          example: "223e4567-e89b-12d3-a456-426614174001"
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeVectorStoreRequestRecord'
+          description: List of vector records
+          default: []
+      description: Request to the Store for storing and managing knowledge vector data
+
+    KnowledgeVectorStoreResponse:
+      type: object
+      required:
+        - status
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: UUID for request tracking
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        status:
+          $ref: '#/components/schemas/ResponseStatus'
+        message:
+          type: string
+          description: Optional message providing additional information
+          example: "Vector data stored successfully"
+      description: Response from the Store after storing and managing knowledge vector data
+
+    KnowledgeVectorDeleteRequest:
+      type: object
+      required:
+        - wksp_id
+        - mas_id
+        - id
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: Auto-generated UUID for request tracking used if not passed in request
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        wksp_id:
+          type: string
+          minLength: 1
+          description: The workspace ID for the request
+          example: "123e4567-e89b-12d3-a456-426614174001"
+        mas_id:
+          type: string
+          minLength: 1
+          description: ID for the Multi-Agent System
+          example: "223e4567-e89b-12d3-a456-426614174001"
+        id:
+          type: string
+          minLength: 1
+          description: ID of vector to delete
+          example: "123e4567-e89b-12d3-a456-426614174001"
+        soft_delete:
+          type: boolean
+          description: Soft delete the vector
+          default: true
+      description: Request to delete a store
+
+    KnowledgeVectorDeleteResponse:
+      type: object
+      required:
+        - status
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: UUID for request tracking
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        status:
+          $ref: '#/components/schemas/ResponseStatus'
+        message:
+          type: string
+          description: Optional message providing additional information
+          example: "Vector deleted successfully"
+      description: Response from the Store after deleting knowledge vector data
+
+    KnowledgeVectorQueryCriteria:
+      type: object
+      properties:
+        query_type:
+          type: string
+          enum:
+            - list_by_wksp_id
+            - list_by_mas_id
+            - get_by_id
+            - distance_l2
+            - distance_cosine
+          description: Type of query to execute
+          example: "distance_l2"
+        id:
+          type: string
+          format: uuid
+          description: ID of vector to query (required for get_by_id)
+          example: "123e4567-e89b-12d3-a456-426614174001"
+        embedding:
+          $ref: '#/components/schemas/EmbeddingConfig'
+        limit:
+          type: integer
+          minimum: 1
+          description: Limit used by queries
+          example: 10
+      description: Query criteria for vector search operations
+
+    KnowledgeVectorQueryRequest:
+      type: object
+      required:
+        - wksp_id
+        - mas_id
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: Auto-generated UUID for request tracking used if not passed in request
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        wksp_id:
+          type: string
+          minLength: 1
+          description: ID for the Workspace
+          example: "9f136aa0-143c-46a6-82f2-249eac489e52"
+        mas_id:
+          type: string
+          minLength: 1
+          description: ID for the Multi-Agent System
+          example: "223e4567-e89b-12d3-a456-426614174001"
+        query_criteria:
+          $ref: '#/components/schemas/KnowledgeVectorQueryCriteria'
+      description: Request to query the store
+
+    KnowledgeVectorQueryResponseRecord:
+      type: object
+      required:
+        - id
+        - content
+        - embedding
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier
+          example: "123e4567-e89b-12d3-a456-426614174001"
+        content:
+          type: string
+          description: Content in plain text
+          example: "This is sample content from vector storage"
+        embedding:
+          $ref: '#/components/schemas/EmbeddingConfig'
+        distance:
+          type: number
+          format: float
+          description: Distance between query and record (only included for similarity queries)
+          example: 0.85
+        created_at:
+          type: integer
+          description: Timestamp of record creation in epoch time
+          example: 1640995200
+        updated_at:
+          type: integer
+          description: Timestamp of record update in epoch time
+          example: 1640995200
+      description: Individual record in query response
+
+    KnowledgeVectorQueryResponse:
+      type: object
+      required:
+        - status
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: UUID for request tracking
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        status:
+          $ref: '#/components/schemas/ResponseStatus'
+        message:
+          type: string
+          description: Optional message providing additional information
+          example: "Query executed successfully"
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeVectorQueryResponseRecord'
+          description: Query response records (only included for success status)
+      description: Response from the Store after querying knowledge vector data
 
 externalDocs:
   description: Find more info about the IOC Knowledge Memory Service

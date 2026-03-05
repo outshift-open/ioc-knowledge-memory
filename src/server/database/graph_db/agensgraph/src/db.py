@@ -1,120 +1,56 @@
 import logging
-import os
 
-from sqlalchemy import create_engine
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import QueuePool
 import agensgraph
 
-# Used when environment variables are not configured
-AGENSGRAPH_DB_DEFAULT = "ioc-graph-db"
-AGENSGRAPH_HOST_DEFAULT = "localhost"
-AGENSGRAPH_PORT_DEFAULT = "5456"
+from server.database.connection import ConnectDB
 
 
 class GraphDB:
     """
-    Sync Agensgraph Database connection manager with connection pooling.
-    Implements singleton pattern for application-wide database access.
+    Sync Agensgraph Database operations using ConnectDB singleton.
+    Uses shared database connection for all graph operations.
     """
 
-    _instance = None
-    _initialized = False
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(GraphDB, cls).__new__(cls)
-            # Only initialize instance attributes once
-            cls._instance._engine = None
-            cls._instance._session_factory = None
-            cls._instance.logger = logging.getLogger(__name__)
-            cls._instance._initialized = False
-        return cls._instance
-
     def __init__(self):
-        # This will be called on each instantiation, but we only want to initialize once
-        if not self._initialized:
-            self._initialized = True
-            self.logger.debug("Initializing RelationalDB instance")
+        self.logger = logging.getLogger(__name__)
+        self.connect_db = ConnectDB()
 
     def init(self, db_name: str = None, user: str = None, password: str = None, host: str = None, port: str = None):
-        """Initialize the database connection and sessionmaker.
+        """Initialize the database connection using ConnectDB singleton.
 
         Args:
-            db_name: Database name
-            user: Database user
-            password: Database password
-            host: Database host
-            port: Database port
+            db_name: Database name (passed to ConnectDB)
+            user: Database user (passed to ConnectDB)
+            password: Database password (passed to ConnectDB)
+            host: Database host (passed to ConnectDB)
+            port: Database port (passed to ConnectDB)
 
         Raises:
             Exception: If there's an error initializing the database connection
         """
         try:
-            if self._engine is None or self._session_factory is None:
-                # Get connection parameters from arguments or environment variables
-                db_name = db_name or os.getenv("AGENSGRAPH_DB", AGENSGRAPH_DB_DEFAULT)
-                user = user or os.getenv("AGENSGRAPH_USER")
-                password = password or os.getenv("AGENSGRAPH_PASSWORD")
-                host = host or os.getenv("AGENSGRAPH_HOST", AGENSGRAPH_HOST_DEFAULT)
-                port = port or os.getenv("AGENSGRAPH_PORT", AGENSGRAPH_PORT_DEFAULT)
-
-                # Create connection URL (mask password in logs)
-                url = f"postgresql://{user}:***@{host}:{port}/{db_name}"
-                url_with_password = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
-
-                self.logger.debug(f"Connection to {url}")
-
-                # Create sync engine for psycopg2
-                self._engine = create_engine(
-                    url_with_password,
-                    echo=os.getenv("DB_ECHO", "False").lower() == "true",
-                    poolclass=QueuePool,
-                    pool_pre_ping=True,
-                    pool_recycle=3600,
-                    pool_size=5,
-                    max_overflow=10,
-                    pool_timeout=30,
-                )
-
-                # Verify database connectivity
-                self.verify_connectivity()
-
-                # Create session factory
-                self._session_factory = sessionmaker(autocommit=False, autoflush=False, bind=self._engine)
-                self.logger.debug("Database session factory created successfully")
-
-                self.logger.info(f"Successfully connected to database at {url}")
-
+            # Initialize the shared database connection
+            self.connect_db.init(db_name, user, password, host, port)
+            self.logger.info("Graph database connection initialized successfully using ConnectDB")
         except Exception as e:
-            self.logger.error(f"Failed to initialize database connection: {str(e)}")
-            # Reset the instance variables to allow retry
-            self._engine = None
-            self._session_factory = None
+            self.logger.error(f"Failed to initialize graph database connection: {str(e)}")
             raise
 
     def close(self):
-        """Close the database connection."""
-        if self._engine is not None:
-            self._engine.dispose()
-            self._engine = None
-            self._session_factory = None
+        """Close the database connection using ConnectDB."""
+        self.connect_db.close()
 
     @property
     def engine(self):
-        """Get the engine instance."""
-        if self._engine is None:
-            raise RuntimeError("Database not initialized. Call init() first.")
-        return self._engine
+        """Get the engine instance from ConnectDB."""
+        return self.connect_db.engine
 
     @property
     def session_factory(self):
-        """Get the session factory."""
-        if self._session_factory is None:
-            raise RuntimeError("Database not initialized. Call init() first.")
-        return self._session_factory
+        """Get the session factory from ConnectDB."""
+        return self.connect_db.session_factory
 
     def verify_connectivity(self) -> None:
         """Verify database connectivity by executing a simple query.
@@ -122,11 +58,11 @@ class GraphDB:
         Raises:
             RuntimeError: If the database connection fails
         """
-        if self._engine is None:
+        if self.connect_db.engine is None:
             raise RuntimeError("Database engine not initialized. Call init() first.")
 
         try:
-            with self._engine.connect() as conn:
+            with self.connect_db.engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
                 conn.commit()
         except SQLAlchemyError as e:
@@ -145,7 +81,7 @@ class GraphDB:
             RuntimeError: If there's an error creating the graph
         """
         try:
-            with self._engine.begin() as conn:
+            with self.connect_db.engine.begin() as conn:
                 # Check if graph already exists
                 result = conn.execute(
                     text("SELECT COUNT(*) FROM ag_graph WHERE graphname = :name"), {"name": graph_name}
@@ -179,7 +115,7 @@ class GraphDB:
             RuntimeError: If there's an error deleting the graph
         """
         try:
-            with self._engine.begin() as conn:
+            with self.connect_db.engine.begin() as conn:
                 # Check if graph exists first
                 check_stmt = text(
                     """
@@ -223,7 +159,7 @@ class GraphDB:
             RuntimeError: If there's an error retrieving the graph
         """
         try:
-            with self._engine.connect() as conn:
+            with self.connect_db.engine.connect() as conn:
                 result = conn.execute(
                     text(
                         """
@@ -261,7 +197,7 @@ class GraphDB:
             RuntimeError: If there's an error retrieving the node
         """
         try:
-            with self._engine.connect() as conn:
+            with self.connect_db.engine.connect() as conn:
                 with conn.begin():
                     # Set the graph path
                     conn.exec_driver_sql(f'SET graph_path = "{graph}"')
@@ -305,7 +241,7 @@ class GraphDB:
             RuntimeError: If there's an error retrieving the edge
         """
         try:
-            with self._engine.connect() as conn:
+            with self.connect_db.engine.connect() as conn:
                 with conn.begin():
                     # Set the graph path
                     conn.exec_driver_sql(f'SET graph_path = "{graph}"')
@@ -368,7 +304,7 @@ class GraphDB:
             return True, f"Graph: {graph} created"
 
         try:
-            with self._engine.connect() as conn:
+            with self.connect_db.engine.connect() as conn:
                 # Start a transaction
                 with conn.begin():
                     # Set the graph path for this connection
@@ -463,7 +399,7 @@ class GraphDB:
             return True, "No nodes provided for deletion"
 
         try:
-            with self._engine.connect() as conn:
+            with self.connect_db.engine.connect() as conn:
                 # Start a transaction
                 with conn.begin():
                     # Set the graph path for this connection
@@ -509,7 +445,7 @@ class GraphDB:
                 raise ValueError("Only one node can be used for concept query")
 
             node = nodes[0]
-            with self._engine.connect() as conn:
+            with self.connect_db.engine.connect() as conn:
                 # Set the graph path for this connection
                 conn.exec_driver_sql(f'SET graph_path = "{graph}"')
 
@@ -558,7 +494,7 @@ class GraphDB:
             node = nodes[0]
 
             # Execute the query
-            with self._engine.connect() as conn:
+            with self.connect_db.engine.connect() as conn:
                 # Set the graph path for this connection
                 conn.exec_driver_sql(f'SET graph_path = "{graph}"')
 
@@ -616,7 +552,7 @@ class GraphDB:
             node_src = nodes[0]
             node_dst = nodes[1]
 
-            with self._engine.connect() as conn:
+            with self.connect_db.engine.connect() as conn:
                 # Set the graph path for this connection
                 conn.exec_driver_sql(f'SET graph_path = "{graph}"')
 

@@ -5,13 +5,19 @@ from fastapi.exceptions import RequestValidationError
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Convert Pydantic request validation errors to required response format.
 
-    This handler routes knowledge graph requests to their specific handler
+    This handler routes knowledge graph and vector requests to their specific handlers
     and uses FastAPI's default handling for other endpoints.
     """
 
-    if request.url.path.startswith("/api/knowledge/graph"):
+    if request.url.path.startswith("/api/knowledge/graphs"):
         # Import here to avoid circular imports
         from server.api.endpoints.knowledge_graph import validation_exception_handler
+
+        return await validation_exception_handler(request, exc)
+
+    elif request.url.path.startswith("/api/knowledge/vectors"):
+        # Import here to avoid circular imports
+        from server.api.endpoints.knowledge_vector import validation_exception_handler
 
         return await validation_exception_handler(request, exc)
 

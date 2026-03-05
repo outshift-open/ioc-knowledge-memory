@@ -14,6 +14,7 @@ from app_logging.logger import setup_logging
 from server.api.api import api_router
 from server.api.exception_handlers import validation_exception_handler
 from server.common import service_name
+from server.database.connection import ConnectDB
 from server.database.graph_db.agensgraph.src.db import GraphDB as AgensGraphDB
 
 # Load environment variables from .env file in current or parent directories
@@ -32,19 +33,20 @@ def register_provider():
     if not svc_url:
         logger.error("MEMORY_PROVIDER_REGISTRATION_URL environment variable not set")
         raise ValueError("MEMORY_PROVIDER_REGISTRATION_URL environment variable is required")
-    
+
     # Prepare the request payload
     payload = {
         "memory_provider_name": "ioc-memory-provider",
+        #"description": "Internal Memory provider for IOC with support for graph and vector memory stores. API documentation: http://localhost:9003/docs",
         "config": {
             "host": os.environ.get("SERVICE_NAME", "ioc-knowledge-memory-svc"),
             "port": os.environ.get("PORT", "9003"),
-        }
+        },
     }
-    
+
     # Make the POST request
     url = f"{svc_url.rstrip('/')}/api/memory-providers"
-    
+
     try:
         response = requests.post(url, json=payload, timeout=30)
         if response.status_code == 201:
@@ -55,7 +57,7 @@ def register_provider():
             error_msg = f"Unexpected response status: {response.status_code}, body: {response.text}"
             logger.error(error_msg)
             raise Exception(error_msg)
-            
+
     except requests.exceptions.RequestException as e:
         error_msg = f"Memory Provider Registration failed: {str(e)}"
         logger.error(error_msg)
@@ -69,7 +71,11 @@ async def lifespan(app: FastAPI):
     try:
         # Register as memory-provider
         register_provider()
-        
+
+        # Initialize database connection
+        connect_db = ConnectDB()
+        connect_db.init()
+
         # Initialize graph database
         agensgraph_db = AgensGraphDB()
         agensgraph_db.init()
@@ -84,6 +90,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Closing database connection...")
+    connect_db.close()
     agensgraph_db.close()
     logger.info("Database connection closed")
 
