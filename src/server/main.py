@@ -34,14 +34,17 @@ def register_provider():
         logger.error("MEMORY_PROVIDER_REGISTRATION_URL environment variable not set")
         raise ValueError("MEMORY_PROVIDER_REGISTRATION_URL environment variable is required")
 
+    url = "http://" + os.environ.get("SERVICE_NAME", "ioc-knowledge-memory-svc") + ":" + os.environ.get("PORT", "9003")
+    description = (f"Memory provider with support for graph and vector data. "
+                   f"API documentation: {url}/docs")
     # Prepare the request payload
     payload = {
         "memory_provider_name": "ioc-memory-provider",
-        #"description": "Internal Memory provider for IOC with support for graph and vector memory stores. API documentation: http://localhost:9003/docs",
+        "description": description,
         "config": {
-            "host": os.environ.get("SERVICE_NAME", "ioc-knowledge-memory-svc"),
-            "port": os.environ.get("PORT", "9003"),
-        },
+            "url": url,
+            "shared":"True"
+        }
     }
 
     # Make the POST request
@@ -68,10 +71,13 @@ def register_provider():
 async def lifespan(app: FastAPI):
     """Manage application lifespan events."""
 
+    # Register as memory-provider (non-critical, continue if it fails)
     try:
-        # Register as memory-provider
         register_provider()
+    except Exception as e:
+        logger.warning(f"Memory provider registration failed, but continuing startup: {str(e)}")
 
+    try:
         # Initialize database connection
         connect_db = ConnectDB()
         connect_db.init()
@@ -81,7 +87,7 @@ async def lifespan(app: FastAPI):
         agensgraph_db.init()
 
     except Exception as e:
-        logger.error(f"Graph Database initialization failed: {str(e)}")
+        logger.error(f"Database initialization failed: {str(e)}")
         raise
 
     logger.info("Database connections initialized")
