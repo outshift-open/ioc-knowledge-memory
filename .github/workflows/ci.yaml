@@ -181,7 +181,6 @@ jobs:
           pip install setuptools wheel twine
 
       - name: Configure Artifactory credentials
-        working-directory: src/knowledge_memory
         run: |
           cat > ~/.pypirc << EOF
           [distutils]
@@ -193,7 +192,6 @@ jobs:
           EOF
 
       - name: Build and publish package
-        working-directory: src/knowledge_memory
         run: |
           # Auto-version with timestamp for unique builds (PEP 440 compliant)
           TIMESTAMP=$(date +%Y%m%d%H%M%S)

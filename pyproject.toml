@@ -1,6 +1,6 @@
 [project]
-name = "ioc-knowledge-memory-svc"
-version = "0.1.0"
+name = "knowledge-memory"
+version = "0.1.1"
 description = "ioc-knowledge-memory-svc"
 readme = "README.md"
 requires-python = ">=3.10,<4.0.0"

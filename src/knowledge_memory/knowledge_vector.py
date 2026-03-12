@@ -18,19 +18,44 @@ from typing import List, Dict, Any, Optional, Literal
 from uuid import uuid4
 from pydantic import ValidationError as PydanticValidationError
 
-from server.services.knowledge_vector import knowledge_vector_service
-from server.schemas.knowledge_vector import (
-    KnowledgeVectorStoreOnboardRequest,
-    KnowledgeVectorStoreOnboardResponse,
-    KnowledgeVectorStoreRequest,
-    KnowledgeVectorStoreResponse,
-    KnowledgeVectorQueryRequest,
-    KnowledgeVectorQueryResponse,
-    KnowledgeVectorDeleteRequest,
-    KnowledgeVectorDeleteResponse,
-    KnowledgeVectorStoreOnboardDeleteRequest,
-    KnowledgeVectorStoreOnboardDeleteResponse,
-)
+try:
+    # Try namespaced import (works when installed as wheel)
+    from knowledge_memory.server.services.knowledge_vector import knowledge_vector_service
+    from knowledge_memory.server.schemas.knowledge_vector import (
+        KnowledgeVectorStoreOnboardRequest,
+        KnowledgeVectorStoreOnboardResponse,
+        KnowledgeVectorStoreRequest,
+        KnowledgeVectorStoreResponse,
+        KnowledgeVectorQueryRequest,
+        KnowledgeVectorQueryResponse,
+        KnowledgeVectorDeleteRequest,
+        KnowledgeVectorDeleteResponse,
+        KnowledgeVectorStoreOnboardDeleteRequest,
+        KnowledgeVectorStoreOnboardDeleteResponse,
+    )
+except (ImportError, ModuleNotFoundError):
+    # Fallback for development (when src/ is in path)
+    try:
+        from server.services.knowledge_vector import knowledge_vector_service
+        from server.schemas.knowledge_vector import (
+            KnowledgeVectorStoreOnboardRequest,
+            KnowledgeVectorStoreOnboardResponse,
+            KnowledgeVectorStoreRequest,
+            KnowledgeVectorStoreResponse,
+            KnowledgeVectorQueryRequest,
+            KnowledgeVectorQueryResponse,
+            KnowledgeVectorDeleteRequest,
+            KnowledgeVectorDeleteResponse,
+            KnowledgeVectorStoreOnboardDeleteRequest,
+            KnowledgeVectorStoreOnboardDeleteResponse,
+        )
+    except (ImportError, AttributeError) as e:
+        raise ImportError(
+            f"Failed to import from 'server' module: {e}. "
+            "This likely means you have a conflicting 'server' module. "
+            "For development: ensure 'src/' is in PYTHONPATH with both "
+            "'knowledge_memory' and 'server' directories available."
+        ) from e
 from knowledge_memory.exceptions import (
     ValidationError,
     NotFoundError,

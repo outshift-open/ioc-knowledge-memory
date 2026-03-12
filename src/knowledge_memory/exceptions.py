@@ -38,7 +38,12 @@ def check_response_status(response, operation: str):
         NotFoundError: If resource not found
         OperationFailedError: If operation failed
     """
-    from server.schemas.knowledge_graph import ResponseStatus
+    try:
+        # Try namespaced import (works when installed as wheel)
+        from knowledge_memory.server.schemas.knowledge_graph import ResponseStatus
+    except (ImportError, ModuleNotFoundError):
+        # Fallback for development
+        from server.schemas.knowledge_graph import ResponseStatus
 
     if response.status == ResponseStatus.VALIDATION_ERROR:
         raise ValidationError(f"{operation} validation error: {response.message}")
