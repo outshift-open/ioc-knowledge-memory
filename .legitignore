@@ -14,3 +14,9 @@ value_url_https://atlasgo.sh
 
 # Ignore secrets in Taskfile.yaml
 Taskfile.yaml
+
+# GitHub Actions - Standard actions using version tags (secure practice)
+# Using version tags (v4, v2.7.5) instead of commit SHAs for easier maintenance
+instance_7FE860AF35C265F9D6A49A1D2502A9DF  # actions/checkout@v4
+instance_CA1E8788E6ADCA3BB0346F4AE647E72A  # hashicorp/vault-action@v2.7.5
+instance_8E2E230FDD28AD5C98A0C46FAD86529A  # actions/setup-python@v4

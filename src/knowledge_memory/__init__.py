@@ -55,4 +55,4 @@ __all__ = [
     "delete_vector_store_internal",
 ]
 
-__version__ = "1.0.0"
+__version__ = "0.1.0"
