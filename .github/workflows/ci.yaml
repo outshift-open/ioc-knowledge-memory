@@ -1,4 +1,4 @@
-name: ci-tkf-data-logic-svc CI workflow
+name: CI/CD Pipeline
 
 on:
   # we want pull requests so we can build(test) but not push to image registry
@@ -40,16 +40,16 @@ jobs:
       #   password: ${{ secrets.GHCR_TOKEN }}
 
     services:
-      tkf-relational-db:
-        image: timescale/timescaledb-ha:pg17
+      ioc-knowledge-db:
+        image: ghcr.io/cisco-eti/ioc-knowledge-memory-svc-db:1.0
         env:
-          POSTGRES_DB: tkf
+          POSTGRES_DB: ioc-knowledge-db
           POSTGRES_USER: postgresUser
           POSTGRES_PASSWORD: postgresPW
         ports:
-          - 5455:5432
+          - 5456:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgresUser -d ioc-knowledge-db"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -119,27 +119,27 @@ jobs:
       ################################## Unit Test ##################################
       ###############################################################################
 
-      - name: Wait for PostgreSQL
+      - name: Wait for PostgreSQL (ioc-knowledge-db)
         env:
-          POSTGRES_DB: tkf
+          POSTGRES_DB: ioc-knowledge-db
           POSTGRES_USER: postgresUser
           POSTGRES_PASSWORD: postgresPW
-          POSTGRES_HOST: tkf-relational-db
+          POSTGRES_HOST: ioc-knowledge-db
           POSTGRES_PORT: 5432
         run: |
           apt-get update && apt-get install -y postgresql-client
           until pg_isready -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER; do
-            echo "Waiting for PostgreSQL..."
+            echo "Waiting for ioc-knowledge-db PostgreSQL..."
             sleep 2
           done
-          echo "PostgreSQL is ready!"
+          echo "ioc-knowledge-db PostgreSQL is ready!"
 
       - name: Run Unit Tests
         env:
-          POSTGRES_DB: tkf
+          POSTGRES_DB: ioc-knowledge-db
           POSTGRES_USER: postgresUser
           POSTGRES_PASSWORD: postgresPW
-          POSTGRES_HOST: tkf-relational-db
+          POSTGRES_HOST: ioc-knowledge-db
           POSTGRES_PORT: 5432
         run: |
           bash scripts/unit-test.sh
