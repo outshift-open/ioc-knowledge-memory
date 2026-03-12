@@ -4,7 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 import agensgraph
 
-from server.database.connection import ConnectDB
+from knowledge_memory.server.database.connection import ConnectDB
 
 
 class GraphDB:

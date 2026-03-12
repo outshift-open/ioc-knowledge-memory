@@ -2,7 +2,7 @@ from fastapi import APIRouter, status, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from server.schemas.knowledge_vector import (
+from knowledge_memory.server.schemas.knowledge_vector import (
     KnowledgeVectorStoreOnboardRequest,
     KnowledgeVectorStoreOnboardResponse,
     KnowledgeVectorStoreOnboardDeleteRequest,
@@ -15,7 +15,7 @@ from server.schemas.knowledge_vector import (
     KnowledgeVectorDeleteResponse,
     ResponseStatus,
 )
-from server.services.knowledge_vector import knowledge_vector_service
+from knowledge_memory.server.services.knowledge_vector import knowledge_vector_service
 
 router = APIRouter()
 internal_router = APIRouter()

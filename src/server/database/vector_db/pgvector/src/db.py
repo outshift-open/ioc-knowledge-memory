@@ -5,8 +5,8 @@ from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from server.database.connection import ConnectDB
-from server.schemas.knowledge_vector import (
+from knowledge_memory.server.database.connection import ConnectDB
+from knowledge_memory.server.schemas.knowledge_vector import (
     KnowledgeVectorStoreRequestRecord,
     KnowledgeVectorQueryCriteria,
     QUERY_TYPE_INTERNAL_LIST_BY_WKSP_ID,

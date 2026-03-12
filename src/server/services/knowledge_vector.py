@@ -1,7 +1,7 @@
 import logging
 
-from server.database.vector_db.pgvector.src.db import VectorDB, VectorDBStoreRequest, VectorDBQueryRequest
-from server.schemas.knowledge_vector import (
+from knowledge_memory.server.database.vector_db.pgvector.src.db import VectorDB, VectorDBStoreRequest, VectorDBQueryRequest
+from knowledge_memory.server.schemas.knowledge_vector import (
     KnowledgeVectorStoreRequest,
     KnowledgeVectorStoreResponse,
     KnowledgeVectorStoreOnboardRequest,

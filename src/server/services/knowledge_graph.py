@@ -1,8 +1,8 @@
 import logging
 
-from server.adapters.adapter_graphdb_agensgraph import AdapterGraphdbAgensgraph
-from server.database.graph_db.agensgraph.src.db import GraphDB
-from server.schemas.knowledge_graph import (
+from knowledge_memory.server.adapters.adapter_graphdb_agensgraph import AdapterGraphdbAgensgraph
+from knowledge_memory.server.database.graph_db.agensgraph.src.db import GraphDB
+from knowledge_memory.server.schemas.knowledge_graph import (
     KnowledgeGraphStoreRequest,
     KnowledgeGraphStoreResponse,
     KnowledgeGraphDeleteRequest,

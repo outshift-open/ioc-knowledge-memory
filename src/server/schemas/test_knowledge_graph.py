@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from server.schemas.knowledge_graph import (
+from knowledge_memory.server.schemas.knowledge_graph import (
     ResponseStatus,
     EmbeddingConfig,
     Concept,

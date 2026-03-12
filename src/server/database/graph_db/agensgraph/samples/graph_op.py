@@ -12,7 +12,7 @@ import logging
 import sys
 from pathlib import Path
 
-from app_logging import setup_logging
+from knowledge_memory.app_logging import setup_logging
 
 # Add the project root to the Python path
 project_root = Path(__file__).resolve().parents[3]

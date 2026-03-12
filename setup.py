@@ -41,7 +41,7 @@ package_dir = {
 
 setup(
     name="knowledge-memory",
-    version="0.1.1",
+    version="0.1.2",
     description="Direct Python library interface for knowledge memory operations",
     long_description=long_description,
     long_description_content_type="text/markdown",

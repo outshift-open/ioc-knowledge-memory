@@ -2,10 +2,10 @@ import json
 import logging
 from typing import Tuple, List, Dict, Any
 
-from server.database.graph_db.agensgraph.models.edge import Edge
-from server.database.graph_db.agensgraph.models.node import Node
-from server.schemas.knowledge_graph import EmbeddingConfig
-from server.schemas.knowledge_graph import KnowledgeGraphQueryResponseRecord, Concept, Relation
+from knowledge_memory.server.database.graph_db.agensgraph.models.edge import Edge
+from knowledge_memory.server.database.graph_db.agensgraph.models.node import Node
+from knowledge_memory.server.schemas.knowledge_graph import EmbeddingConfig
+from knowledge_memory.server.schemas.knowledge_graph import KnowledgeGraphQueryResponseRecord, Concept, Relation
 
 
 class AdapterGraphdbAgensgraph:

@@ -57,7 +57,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           # The branch, tag or SHA to checkout, otherwise, uses the default branch.
           ref: ${{ github.ref }}
@@ -110,6 +110,10 @@ jobs:
         run: |
           poetry install
 
+      - name: Install knowledge-memory package in editable mode
+        run: |
+          poetry run pip install -e .
+
       ################################## Linting ####################################
       ###############################################################################
 
@@ -155,10 +159,10 @@ jobs:
       group: ${{ vars.DEFAULT_ARC_RUNNERS }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
       - name: Import Vault Secrets
-        uses: hashicorp/vault-action@v2.7.5
+        uses: hashicorp/vault-action@d1720f055e0635fd932a1d2a48f87a666a57906c # v2.7.5
         with:
           url: ${{ vars.KEEPER_URL }}
           method: approle
@@ -171,7 +175,7 @@ jobs:
             ${{ vars.VAULT_SECRET_PATH }}  ARTIFACTORY_USER | ARTIFACTORY_USER ;
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@65d7f2d534ac1bc67fcd62888c5f4f3d2cb2b236 # v4.7.1
         with:
           python-version: '3.11'
 
@@ -195,7 +199,7 @@ jobs:
         run: |
           # Auto-version with timestamp for unique builds (PEP 440 compliant)
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
-          sed "s/version=\"0.1.0\"/version=\"0.1.0.dev${TIMESTAMP}\"/" setup.py > setup.py.tmp
+          sed "s/version=\"0.1.2\"/version=\"0.1.2.dev${TIMESTAMP}\"/" setup.py > setup.py.tmp
           mv setup.py.tmp setup.py
           cat setup.py | grep version
           python setup.py bdist_wheel

@@ -1,14 +1,14 @@
 from fastapi import APIRouter
 
-from server.api.endpoints.knowledge_graph import (
+from knowledge_memory.server.api.endpoints.knowledge_graph import (
     router as knowledge_graph_router,
     internal_router as internal_knowledge_graph_router,
 )
-from server.api.endpoints.knowledge_kvp import (
+from knowledge_memory.server.api.endpoints.knowledge_kvp import (
     router as knowledge_kvp_router,
     internal_router as internal_knowledge_kvp_router,
 )
-from server.api.endpoints.knowledge_vector import (
+from knowledge_memory.server.api.endpoints.knowledge_vector import (
     router as knowledge_vector_router,
     internal_router as internal_knowledge_vector_router,
 )

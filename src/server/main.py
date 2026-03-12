@@ -10,12 +10,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 
-from app_logging.logger import setup_logging
-from server.api.api import api_router
-from server.api.exception_handlers import validation_exception_handler
-from server.common import service_name
-from server.database.connection import ConnectDB
-from server.database.graph_db.agensgraph.src.db import GraphDB as AgensGraphDB
+from knowledge_memory.app_logging.logger import setup_logging
+from knowledge_memory.server.api.api import api_router
+from knowledge_memory.server.api.exception_handlers import validation_exception_handler
+from knowledge_memory.server.common import service_name
+from knowledge_memory.server.database.connection import ConnectDB
+from knowledge_memory.server.database.graph_db.agensgraph.src.db import GraphDB as AgensGraphDB
 
 # Load environment variables from .env file in current or parent directories
 load_dotenv(override=True)

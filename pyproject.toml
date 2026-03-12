@@ -1,6 +1,6 @@
 [project]
 name = "knowledge-memory"
-version = "0.1.1"
+version = "0.1.2"
 description = "ioc-knowledge-memory-svc"
 readme = "README.md"
 requires-python = ">=3.10,<4.0.0"
@@ -27,7 +27,9 @@ dev = [
 ]
 
 [tool.poetry]
-packages = [{include = "server", from = "src"}]
+packages = [
+    {include = "knowledge_memory", from = "src"},
+]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0.0"
@@ -52,8 +54,8 @@ flake8 = "6.1.0"
 httpx = "0.24.1"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 testpaths = ["src", "tests"]
