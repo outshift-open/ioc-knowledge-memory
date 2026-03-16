@@ -3,8 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 
-from server.common import service_name
-from server.api.exception_handlers import (
+from knowledge_memory.server.common import service_name
+from knowledge_memory.server.api.exception_handlers import (
     validation_exception_handler,
 )
 from fastapi.exceptions import RequestValidationError

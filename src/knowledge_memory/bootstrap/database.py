@@ -1,6 +1,6 @@
 import logging
-from server.database.connection import ConnectDB
-from server.database.graph_db.agensgraph.src.db import (
+from knowledge_memory.server.database.connection import ConnectDB
+from knowledge_memory.server.database.graph_db.agensgraph.src.db import (
     GraphDB as AgensGraphDB,
 )
 
