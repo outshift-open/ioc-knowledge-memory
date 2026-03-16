@@ -4,8 +4,8 @@ import os
 from dotenv import load_dotenv
 
 from knowledge_memory.app_logging.logger import setup_logging
-from server.api.api import api_router
-from server.common import service_name
+from knowledge_memory.server.api.api import api_router
+from knowledge_memory.server.common import service_name
 from knowledge_memory.bootstrap.lifespan import create_lifespan
 from knowledge_memory.bootstrap.app_factory import create_app
 
