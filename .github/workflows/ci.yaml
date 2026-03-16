@@ -197,12 +197,13 @@ jobs:
       - name: Build and publish package
         run: |
           # Auto-version with timestamp for unique builds (PEP 440 compliant)
-          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          export TIMESTAMP=$(date +%Y%m%d%H%M%S)
 
           # Read current version from pyproject.toml and update it
           python << 'EOF'
           import tomllib
           import re
+          import os
 
           # Read current version
           with open('pyproject.toml', 'rb') as f:
@@ -214,7 +215,8 @@ jobs:
               content = f.read()
 
           # Update version with dev timestamp
-          new_version = f'{current_version}.dev${{TIMESTAMP}}'
+          timestamp = os.environ.get('TIMESTAMP', '')
+          new_version = f'{current_version}.dev{timestamp}'
           content = re.sub(
               r'version = "[^"]*"',
               f'version = "{new_version}"',
