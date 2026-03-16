@@ -53,6 +53,8 @@ __all__ = [
     "query_vector_store",
     "delete_vector",
     "delete_vector_store_internal",
+
+    "bootstrap"
 ]
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"

@@ -41,7 +41,7 @@ package_dir = {
 
 setup(
     name="knowledge-memory",
-    version="0.1.2",
+    version="0.1.3",
     description="Direct Python library interface for knowledge memory operations",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -56,6 +56,9 @@ setup(
         "sqlalchemy>=2.0.23",
         "pgvector>=0.4.2",
         "python-dotenv>=1.0.0",
+        "fastapi>=0.104.1",
+        "requests>=2.31.0",
+        "prometheus-fastapi-instrumentator>=6.1.0",
     ],
     classifiers=[
         "Development Status :: 4 - Beta",
