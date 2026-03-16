@@ -73,6 +73,34 @@ poetry run python main.py
 docker-compose up --build
 ```
 
+## Version Management
+
+This project uses **pyproject.toml as the single source of truth** for versioning.
+
+### How to Bump Version
+
+**Simply edit one line in [pyproject.toml](pyproject.toml):**
+```toml
+[project]
+version = "0.1.5"  # Change this line only!
+```
+
+**All other locations automatically sync:**
+- ✅ `setup.py` - reads from pyproject.toml
+- ✅ `src/knowledge_memory/__init__.py` - uses `importlib.metadata`
+- ✅ `.github/workflows/ci.yaml` - dynamically reads and updates for dev builds
+
+**No manual sync needed!** The version is automatically propagated to:
+- Package metadata when building
+- Runtime `__version__` attribute
+- CI/CD dev builds (adds `.devYYYYMMDDHHMMSS` suffix)
+
+### Version Format
+
+We follow [PEP 440](https://peps.python.org/pep-0440/) versioning:
+- Release versions: `0.1.4`, `0.2.0`, `1.0.0`
+- Dev builds (CI): `0.1.4.dev20260316120000`
+
 ## Python Library (New!)
 
 For **in-process, high-performance access** without HTTP overhead:

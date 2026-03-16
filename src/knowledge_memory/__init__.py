@@ -14,6 +14,8 @@ Usage:
 For HTTP API (external clients), use REST API at /api/knowledge/*
 """
 
+from importlib.metadata import version, PackageNotFoundError
+
 from knowledge_memory.exceptions import (
     KnowledgeMemoryError,
     ValidationError,
@@ -57,4 +59,9 @@ __all__ = [
     "bootstrap"
 ]
 
-__version__ = "0.1.4"
+# Dynamically read version from package metadata (pyproject.toml)
+try:
+    __version__ = version("knowledge-memory")
+except PackageNotFoundError:
+    # Package not installed, fallback (e.g., during development)
+    __version__ = "unknown"
