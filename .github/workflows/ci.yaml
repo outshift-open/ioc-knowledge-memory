@@ -199,7 +199,7 @@ jobs:
         run: |
           # Auto-version with timestamp for unique builds (PEP 440 compliant)
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
-          sed "s/version=\"0.1.2\"/version=\"0.1.2.dev${TIMESTAMP}\"/" setup.py > setup.py.tmp
+          sed "s/version=\"0.1.3\"/version=\"0.1.3.dev${TIMESTAMP}\"/" setup.py > setup.py.tmp
           mv setup.py.tmp setup.py
           cat setup.py | grep version
           python setup.py bdist_wheel
