@@ -28,6 +28,8 @@ from knowledge_memory.knowledge_graph import (
     query_knowledge_graph,
     delete_knowledge_graph,
     delete_knowledge_graph_internal,
+    upsert_knowledge_graph_async,
+    query_knowledge_graph_async,
 )
 
 from knowledge_memory.knowledge_vector import (
@@ -49,6 +51,8 @@ __all__ = [
     "query_knowledge_graph",
     "delete_knowledge_graph",
     "delete_knowledge_graph_internal",
+    "upsert_knowledge_graph_async",
+    "query_knowledge_graph_async",
     # Knowledge Vector
     "onboard_vector_store",
     "upsert_vector_store",

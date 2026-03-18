@@ -12,6 +12,13 @@ IOC_KNOWLEDGE_DB_DEFAULT = "ioc-knowledge-db"
 IOC_KNOWLEDGE_DB_HOST_DEFAULT = "localhost"
 IOC_KNOWLEDGE_DB_PORT_DEFAULT = "5456"
 
+# Connection pool defaults - tuned for async operations with asyncio.to_thread
+# These values support moderate-to-high concurrent operations
+DB_POOL_SIZE_DEFAULT = 20  # Persistent connections
+DB_MAX_OVERFLOW_DEFAULT = 30  # Additional connections (total: 50)
+DB_POOL_TIMEOUT_DEFAULT = 60  # Seconds to wait for connection
+DB_POOL_RECYCLE_DEFAULT = 3600  # Recycle connections after 1 hour
+
 
 class ConnectDB:
     """
@@ -63,22 +70,33 @@ class ConnectDB:
                 host = host or os.getenv("IOC_KNOWLEDGE_DB_HOST", IOC_KNOWLEDGE_DB_HOST_DEFAULT)
                 port = port or os.getenv("IOC_KNOWLEDGE_DB_PORT", IOC_KNOWLEDGE_DB_PORT_DEFAULT)
 
+                # Get connection pool settings from environment variables with defaults
+                pool_size = int(os.getenv("DB_POOL_SIZE", DB_POOL_SIZE_DEFAULT))
+                max_overflow = int(os.getenv("DB_MAX_OVERFLOW", DB_MAX_OVERFLOW_DEFAULT))
+                pool_timeout = int(os.getenv("DB_POOL_TIMEOUT", DB_POOL_TIMEOUT_DEFAULT))
+                pool_recycle = int(os.getenv("DB_POOL_RECYCLE", DB_POOL_RECYCLE_DEFAULT))
+
                 # Create connection URL (mask password in logs)
                 url = f"postgresql://{user}:***@{host}:{port}/{db_name}"
                 url_with_password = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
 
                 self.logger.debug(f"Connection to {url}")
+                self.logger.debug(
+                    f"Pool config: size={pool_size}, max_overflow={max_overflow}, "
+                    f"timeout={pool_timeout}s, recycle={pool_recycle}s"
+                )
 
                 # Create sync engine for psycopg2
+                # Pool settings optimized for concurrent async operations via asyncio.to_thread
                 self._engine = create_engine(
                     url_with_password,
                     echo=os.getenv("DB_ECHO", "False").lower() == "true",
                     poolclass=QueuePool,
-                    pool_pre_ping=True,
-                    pool_recycle=3600,
-                    pool_size=5,
-                    max_overflow=10,
-                    pool_timeout=30,
+                    pool_pre_ping=True,  # Verify connections before using
+                    pool_recycle=pool_recycle,  # Recycle connections periodically
+                    pool_size=pool_size,  # Persistent connections
+                    max_overflow=max_overflow,  # Additional overflow connections
+                    pool_timeout=pool_timeout,  # Wait time for connection
                 )
 
                 # Verify database connectivity
@@ -133,3 +151,51 @@ class ConnectDB:
                 conn.commit()
         except SQLAlchemyError as e:
             raise RuntimeError(f"Database connection failed: {str(e)}")
+
+    def get_pool_status(self) -> dict:
+        """Get current connection pool status for monitoring.
+
+        Returns:
+            dict: Pool statistics including size, checked_in, checked_out, overflow, etc.
+                 Returns empty dict if engine not initialized.
+
+        Example:
+            >>> connect_db = ConnectDB()
+            >>> status = connect_db.get_pool_status()
+            >>> print(f"Active connections: {status['checked_out']}")
+            >>> print(f"Available connections: {status['checked_in']}")
+        """
+        if self._engine is None:
+            return {}
+
+        try:
+            pool = self._engine.pool
+            # Use getattr with defaults to handle pool types that may not have all methods
+            size = getattr(pool, 'size', lambda: 0)()
+            checked_in = getattr(pool, 'checkedin', lambda: 0)()
+            checked_out = getattr(pool, 'checkedout', lambda: 0)()
+            overflow = getattr(pool, 'overflow', lambda: 0)()
+            max_overflow = getattr(pool, '_max_overflow', 0)
+
+            return {
+                "pool_size": size,
+                "checked_in": checked_in,  # Available connections
+                "checked_out": checked_out,  # Active connections
+                "overflow": overflow,  # Overflow connections in use
+                "total_connections": checked_in + checked_out,
+                "max_possible": size + max_overflow,
+            }
+        except Exception as e:
+            self.logger.warning(f"Failed to get pool status: {e}")
+            return {}
+
+    def log_pool_status(self) -> None:
+        """Log current pool status for debugging/monitoring."""
+        status = self.get_pool_status()
+        if status:
+            self.logger.info(
+                f"Connection pool status: "
+                f"{status['checked_out']}/{status['max_possible']} active, "
+                f"{status['checked_in']} available, "
+                f"{status['overflow']} overflow"
+            )

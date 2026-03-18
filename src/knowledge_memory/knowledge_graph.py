@@ -18,6 +18,7 @@ Usage:
 from typing import List, Dict, Any, Optional, Literal
 from uuid import uuid4
 from pydantic import ValidationError as PydanticValidationError
+import asyncio
 
 try:
     # Try namespaced import (works when installed as wheel)
@@ -131,7 +132,7 @@ def upsert_knowledge_graph(
 def query_knowledge_graph(
     mas_id: Optional[str] = None,
     wksp_id: Optional[str] = None,
-    concepts: List[Dict[str, str]] = None,
+    concepts: Optional[List[Dict[str, str]]] = None,
     query_type: Literal["neighbour", "path", "concept"] = "neighbour",
     memory_type: Optional[str] = None,
     depth: Optional[int] = None,
@@ -286,3 +287,132 @@ def delete_knowledge_graph_internal(
     check_response_status(response, "Delete knowledge graph (internal)")
 
     return response
+
+
+async def upsert_knowledge_graph_async(
+    mas_id: Optional[str] = None,
+    wksp_id: Optional[str] = None,
+    memory_type: Optional[Literal["Semantic", "Procedural", "Episodic"]] = None,
+    concepts: Optional[List[Dict[str, Any]]] = None,
+    relations: Optional[List[Dict[str, Any]]] = None,
+    force_replace: bool = False,
+    request_id: Optional[str] = None,
+) -> KnowledgeGraphStoreResponse:
+    """
+    Async version: Create or update knowledge graph data.
+
+    Args:
+        mas_id: Multi-Agent System ID (optional, but either mas_id or wksp_id must be provided)
+        wksp_id: Workspace ID (optional, but either mas_id or wksp_id must be provided)
+        memory_type: Type of memory - "Semantic", "Procedural", or "Episodic"
+        concepts: List of concept dictionaries with keys: id, name, description, attributes, embeddings, tags
+        relations: List of relation dictionaries with keys: id, relation, node_ids, attributes, embeddings
+        force_replace: If True, replace existing nodes and edges
+        request_id: Optional request ID for tracking (auto-generated if not provided)
+
+    Returns:
+        KnowledgeGraphStoreResponse: Response object with status and message
+
+    Raises:
+        ValidationError: If request validation fails
+        OperationFailedError: If operation fails
+
+    Example:
+        response = await upsert_knowledge_graph_async(
+            mas_id="agent-1",
+            wksp_id="workspace-1",
+            memory_type="Semantic",
+            concepts=[
+                {
+                    "id": "c1",
+                    "name": "Python",
+                    "description": "Programming language",
+                    "tags": ["language", "programming"]
+                }
+            ],
+            relations=[
+                {
+                    "id": "r1",
+                    "relation": "BUILT_WITH",
+                    "node_ids": ["c1", "c2"]
+                }
+            ]
+        )
+    """
+    # Run the synchronous function in a thread pool to avoid blocking the event loop
+    return await asyncio.to_thread(
+        upsert_knowledge_graph,
+        mas_id=mas_id,
+        wksp_id=wksp_id,
+        memory_type=memory_type,
+        concepts=concepts,
+        relations=relations,
+        force_replace=force_replace,
+        request_id=request_id,
+    )
+
+
+async def query_knowledge_graph_async(
+    mas_id: Optional[str] = None,
+    wksp_id: Optional[str] = None,
+    concepts: Optional[List[Dict[str, str]]] = None,
+    query_type: Literal["neighbour", "path", "concept"] = "neighbour",
+    memory_type: Optional[str] = None,
+    depth: Optional[int] = None,
+    use_direction: bool = True,
+    request_id: Optional[str] = None,
+) -> KnowledgeGraphQueryResponse:
+    """
+    Async version: Query knowledge graph data.
+
+    Args:
+        mas_id: Multi-Agent System ID (optional, but either mas_id or wksp_id must be provided)
+        wksp_id: Workspace ID (optional, but either mas_id or wksp_id must be provided)
+        concepts: List of concept dictionaries with 'id' key
+            - For "neighbour" queries: exactly 1 concept required
+            - For "path" queries: exactly 2 concepts required (source and destination)
+            - For "concept" queries: exactly 1 concept required
+        query_type: Type of query - "neighbour", "path", or "concept"
+        memory_type: Optional memory type filter
+        depth: Optional depth for path queries (number of hops)
+        use_direction: Whether to use directed relationships in path queries
+        request_id: Optional request ID for tracking (auto-generated if not provided)
+
+    Returns:
+        KnowledgeGraphQueryResponse: Response with query results
+
+    Raises:
+        ValidationError: If request validation fails
+        NotFoundError: If concepts or graph not found
+        OperationFailedError: If operation fails
+
+    Example:
+        # Query neighbors of a concept
+        response = await query_knowledge_graph_async(
+            mas_id="agent-1",
+            wksp_id="workspace-1",
+            concepts=[{"id": "c1"}],
+            query_type="neighbour"
+        )
+
+        # Query path between two concepts
+        response = await query_knowledge_graph_async(
+            mas_id="agent-1",
+            wksp_id="workspace-1",
+            concepts=[{"id": "c1"}, {"id": "c2"}],
+            query_type="path",
+            depth=5
+        )
+    """
+    # Run the synchronous function in a thread pool to avoid blocking the event loop
+    return await asyncio.to_thread(
+        query_knowledge_graph,
+        mas_id=mas_id,
+        wksp_id=wksp_id,
+        concepts=concepts,
+        query_type=query_type,
+        memory_type=memory_type,
+        depth=depth,
+        use_direction=use_direction,
+        request_id=request_id,
+    )
