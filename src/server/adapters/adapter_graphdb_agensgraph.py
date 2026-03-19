@@ -84,8 +84,8 @@ class AdapterGraphdbAgensgraph:
                 relationships = self._process_relations(data["records"]["relations"], mas_id, wksp_id, memory_type)
 
             self.logger.info(f"Successfully converted to {len(nodes)} nodes and {len(relationships)} edges")
-            self.logger.info(f"Nodes: {nodes}")
-            self.logger.info(f"Relationships: {relationships}")
+            self.logger.debug(f"Nodes: {nodes}")
+            self.logger.debug(f"Relationships: {relationships}")
             return nodes, relationships
 
         except Exception as e:
@@ -333,7 +333,7 @@ class AdapterGraphdbAgensgraph:
             # Create Concept objects for neighbor nodes
             concepts = []
             for node in nodes_data:
-                self.logger.info(f"Converting model to Concept for response: {node}")
+                self.logger.debug(f"Converting model to Concept for response: {node}")
 
                 # Extract properties from node - they might be nested in 'properties' key
                 node_props = node.get("properties", node)

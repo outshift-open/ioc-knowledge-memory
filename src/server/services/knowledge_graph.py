@@ -26,7 +26,7 @@ class KnowledgeGraphService:
     def create_graph_store(self, data: KnowledgeGraphStoreRequest) -> KnowledgeGraphStoreResponse:
         """Create a new knowledge graph store request"""
         request_id = data.request_id
-        self.logger.info(f"Creating: {data}")
+        self.logger.debug(f"Creating: {data}")
         try:
             adapter = AdapterGraphdbAgensgraph()
             graph = adapter.get_graph_name(data.model_dump())

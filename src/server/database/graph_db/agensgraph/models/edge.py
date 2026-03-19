@@ -37,7 +37,7 @@ class Edge:
         if not all(self.node_ids):
             raise ValueError("Node IDs cannot be empty")
         # relation type as uppercase with underscores
-        if not self.relation or not re.match(r"^[A-Z_]+$", self.relation):
+        if not self.relation or not re.match(r"^[A-Z0-9_]+$", self.relation):
             raise ValueError("Relation type must be uppercase with underscores")
         if self.direction not in ("->", "<-", "--"):
             raise ValueError("Direction must be one of: '->', '<-', '--'")
