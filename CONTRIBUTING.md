@@ -1,46 +1,58 @@
-- [Please follow this general contribution guide for SRE repos](https://wwwin-github.cisco.com/pages/eti/eti-platform-docs/development/contribution_guide/)
-- For pushing git tags/branches to this repo, please reach out to [SRE team](mailto:eti-sre-admins@cisco.com)
+# How to Contribute
 
-## Version Management
+Thanks for your interest in contributing to `ioc-knowledge-memory-svc`! Here are a few
+general guidelines on contributing and reporting bugs that we ask you to review.
+Following these guidelines helps to communicate that you respect the time of the
+contributors managing and developing this open source project. In return, they
+should reciprocate that respect in addressing your issue, assessing changes, and
+helping you finalize your pull requests. In that spirit of mutual respect, we
+endeavor to review incoming issues and pull requests within 10 days, and will
+close any lingering issues or pull requests after 60 days of inactivity.
 
-This project uses **pyproject.toml as the single source of truth** for versioning.
+Please note that all of your interactions in the project are subject to our
+[Code of Conduct](/CODE_OF_CONDUCT.md). This includes creation of issues or pull
+requests, commenting on issues or pull requests, and extends to all interactions
+in any real-time space e.g., Slack, Discord, etc.
 
-### How to Release a New Version
+## Reporting Issues
 
-**1. Update version in [pyproject.toml](pyproject.toml):**
-```toml
-[project]
-version = "0.1.5"  # Change this line only!
-```
+Before reporting a new issue, please ensure that the issue was not already
+reported or fixed by searching through our [issues
+list](https://github.com/org_name/repo_name/issues).
 
-**2. Commit and push:**
-```bash
-git add pyproject.toml
-git commit -m "chore: bump version to 0.1.5"
-git push
-```
+When creating a new issue, please be sure to include a **title and clear
+description**, as much relevant information as possible, and, if possible, a
+test case.
 
-**3. CI/CD automatically:**
-- ✅ Reads version from pyproject.toml
-- ✅ Builds package with correct version
-- ✅ Publishes to Artifactory (on `clawbee` branch)
-- ✅ Builds Docker image (on `main` branch)
+**If you discover a security bug, please do not report it through GitHub.
+Instead, please see security procedures in [SECURITY.md](/SECURITY.md).**
 
-### Version Locations
+## Sending Pull Requests
 
-All version information is **automatically synced** from pyproject.toml:
+Before sending a new pull request, take a look at existing pull requests and
+issues to see if the proposed change or fix has been discussed in the past, or
+if the change was already implemented but not yet released.
 
-| Location | How It Works |
-|----------|--------------|
-| `pyproject.toml` | **Source of truth** - edit here only |
-| `setup.py` | Reads from pyproject.toml automatically |
-| `src/knowledge_memory/__init__.py` | Uses `importlib.metadata.version()` |
-| `.github/workflows/ci.yaml` | Reads dynamically for dev builds |
+We expect new pull requests to include tests for any affected behavior, and, as
+we follow semantic versioning, we may reserve breaking changes until the next
+major version release.
 
-**No manual sync needed!** Just update pyproject.toml and everything else follows.
+## Other Ways to Contribute
 
-### Version Format
+We welcome anyone that wants to contribute to `ioc-knowledge-memory-svc` to triage and
+reply to open issues to help troubleshoot and fix existing bugs. Here is what
+you can do:
 
-We follow [PEP 440](https://peps.python.org/pep-0440/) versioning:
-- Release versions: `0.1.4`, `0.2.0`, `1.0.0`
-- Dev builds (CI): `0.1.4.dev20260316120000` (adds timestamp)
+- Help ensure that existing issues follows the recommendations from the
+  _[Reporting Issues](#reporting-issues)_ section, providing feedback to the
+  issue's author on what might be missing.
+- Review and update the existing content of our
+  [Wiki](https://github.com/org_name/repo_name/wiki) with up-to-date
+  instructions and code samples.
+- Review existing pull requests, and testing patches against real existing
+  applications that use `ioc-knowledge-memory-svc`.
+- Write a test, or add a missing test case to an existing test.
+
+Thanks again for your interest on contributing to `ioc-knowledge-memory-svc`!
+
+:heart:
