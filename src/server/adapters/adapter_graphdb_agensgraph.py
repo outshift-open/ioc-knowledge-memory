@@ -328,7 +328,7 @@ class AdapterGraphdbAgensgraph:
                         embeddings=embeddings,
                     )
                 )
-            self.logger.info(f"Created {len(relations)} relations")
+            self.logger.debug(f"Created {len(relations)} relations")
 
             # Create Concept objects for neighbor nodes
             concepts = []
@@ -367,10 +367,10 @@ class AdapterGraphdbAgensgraph:
                         tags=tags,
                     )
                 )
-            self.logger.info(f"Created {len(concepts)} concepts")
+            self.logger.debug(f"Created {len(concepts)} concepts")
 
             # Create the response record
             records.append(KnowledgeGraphQueryResponseRecord(relationships=relations, concepts=concepts))
 
-        self.logger.info(f"Converted {len(records)} records to KnowledgeGraphQueryResponseRecord objects")
+        self.logger.debug(f"Converted {len(records)} records to KnowledgeGraphQueryResponseRecord objects")
         return records

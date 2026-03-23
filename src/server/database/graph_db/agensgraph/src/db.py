@@ -316,7 +316,7 @@ class GraphDB:
                     # Check for existing nodes
                     for node in nodes or []:
                         query, params = node.to_cypher_exists()
-                        self.logger.info(f"Checking for existing node: {query} {params}")
+                        self.logger.debug(f"Checking for existing node: {query} {params}")
                         result = conn.exec_driver_sql(query, params).fetchone()
                         if result and result[0]:
                             existing_nodes.append(node.id)
@@ -324,7 +324,7 @@ class GraphDB:
                     # Check for existing edges
                     for edge in edges or []:
                         query, params = edge.to_cypher_exists()
-                        self.logger.info(f"Checking for existing edge: {query} {params}")
+                        self.logger.debug(f"Checking for existing edge: {query} {params}")
                         result = conn.exec_driver_sql(query, params).fetchone()
                         if result and result[0]:
                             existing_edges.append(edge.id)
@@ -350,7 +350,7 @@ class GraphDB:
                         # delete nodes and associated edges
                         for node in nodes_to_delete or []:
                             query, params = node.to_cypher_delete()
-                            self.logger.info(f"Cypher: {node.to_executable_cypher_with_params(query, params)}")
+                            self.logger.debug(f"Cypher: {node.to_executable_cypher_with_params(query, params)}")
                             conn.exec_driver_sql(query, params)
                             self.logger.info(f"Node {node.id} and associated edges deleted")
 
@@ -451,7 +451,7 @@ class GraphDB:
 
                 # Use the new to_cypher_get method that returns only the node
                 query, params = node.to_cypher_get()
-                self.logger.info(f"Executing get query: {node.to_executable_cypher_with_params(query, params)}")
+                self.logger.debug(f"Executing get query: {node.to_executable_cypher_with_params(query, params)}")
                 result = conn.exec_driver_sql(query, params).fetchone()
 
                 if not result:
@@ -500,14 +500,14 @@ class GraphDB:
 
                 # check if node exists
                 query, params = node.to_cypher_exists()
-                self.logger.info(f"Executing exists query: {node.to_executable_cypher_with_params(query, params)}")
+                self.logger.debug(f"Executing exists query: {node.to_executable_cypher_with_params(query, params)}")
                 result = conn.exec_driver_sql(query, params).fetchone()
                 if not result:
                     self.logger.warning(f"Node {node.id} does not exist")
                     return False, [], f"Node {node.id} does not exist"
 
                 query, params = node.to_cypher_neighbor_query()
-                self.logger.info(f"Executing neighbor query: {node.to_executable_cypher_with_params(query, params)}")
+                self.logger.debug(f"Executing neighbor query: {node.to_executable_cypher_with_params(query, params)}")
 
                 result = conn.exec_driver_sql(query, params).fetchone()
 
@@ -566,7 +566,7 @@ class GraphDB:
 
                 # check if node_dst exists
                 query, params = node_dst.to_cypher_exists()
-                self.logger.info(f"Executing exists query: {node_dst.to_executable_cypher_with_params(query, params)}")
+                self.logger.debug(f"Executing exists query: {node_dst.to_executable_cypher_with_params(query, params)}")
                 result = conn.exec_driver_sql(query, params).fetchone()
                 if not result:
                     self.logger.warning(f"Node {node_dst.id} does not exist")
@@ -576,7 +576,7 @@ class GraphDB:
                     query, params = node_src.to_cypher_path_query_with_direction(node_dst, depth)
                 else:
                     query, params = node_src.to_cypher_path_query(node_dst, depth)
-                self.logger.info(f"Executing path query: {node_src.to_executable_cypher_with_params(query, params)}")
+                self.logger.debug(f"Executing path query: {node_src.to_executable_cypher_with_params(query, params)}")
 
                 # Fetch all paths, using provided query criteria
                 result = conn.exec_driver_sql(query, params)
@@ -590,8 +590,8 @@ class GraphDB:
                     for i, row in enumerate(path_results):
                         path = row[0]  # This should be an AgensGraph Path object
 
-                        self.logger.info(f"Path {i+1} from {node_src.id} to {node_dst.id}:")
-                        self.logger.info(f"Path object: {path}")
+                        self.logger.debug(f"Path {i+1} from {node_src.id} to {node_dst.id}:")
+                        self.logger.debug(f"Path object: {path}")
 
                         # Try to access path attributes
                         path_nodes = []
