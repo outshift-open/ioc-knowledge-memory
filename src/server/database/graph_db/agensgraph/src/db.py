@@ -558,7 +558,7 @@ class GraphDB:
 
                 # check if node_src exists
                 query, params = node_src.to_cypher_exists()
-                self.logger.info(f"Executing exists query: {node_src.to_executable_cypher_with_params(query, params)}")
+                self.logger.debug(f"Executing exists query: {node_src.to_executable_cypher_with_params(query, params)}")
                 result = conn.exec_driver_sql(query, params).fetchone()
                 if not result:
                     self.logger.warning(f"Node {node_src.id} does not exist")

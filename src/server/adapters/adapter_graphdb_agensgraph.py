@@ -289,7 +289,7 @@ class AdapterGraphdbAgensgraph:
             relations = []
             for edge in edges_data:
                 # Create Relation with required fields and handle potential None values
-                self.logger.info(f"Converting model to Relation for response: {edge}")
+                self.logger.debug(f"Converting model to Relation for response: {edge}")
 
                 # Extract properties from edge - they might be nested in 'properties' key
                 edge_props = edge.get("properties", edge)
