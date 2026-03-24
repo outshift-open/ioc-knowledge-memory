@@ -6,7 +6,7 @@ from fastapi import APIRouter, status, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from knowledge_memory.server.schemas.knowledge_graph import (
+from server.schemas.knowledge_graph import (
     KnowledgeGraphStoreRequest,
     KnowledgeGraphStoreResponse,
     KnowledgeGraphQueryRequest,
@@ -15,7 +15,7 @@ from knowledge_memory.server.schemas.knowledge_graph import (
     KnowledgeGraphDeleteResponse,
     ResponseStatus,
 )
-from knowledge_memory.server.services.knowledge_graph import knowledge_graph_service
+from server.services.knowledge_graph import knowledge_graph_service
 
 router = APIRouter()
 internal_router = APIRouter()

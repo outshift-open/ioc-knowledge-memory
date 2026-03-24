@@ -44,7 +44,7 @@ def check_response_status(response, operation: str):
     """
     try:
         # Try namespaced import (works when installed as wheel)
-        from knowledge_memory.server.schemas.knowledge_graph import ResponseStatus
+        from server.schemas.knowledge_graph import ResponseStatus
     except (ImportError, ModuleNotFoundError):
         # Fallback for development
         from server.schemas.knowledge_graph import ResponseStatus

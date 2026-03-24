@@ -24,8 +24,8 @@ from pydantic import ValidationError as PydanticValidationError
 
 try:
     # Try namespaced import (works when installed as wheel)
-    from knowledge_memory.server.services.knowledge_vector import knowledge_vector_service
-    from knowledge_memory.server.schemas.knowledge_vector import (
+    from server.services.knowledge_vector import knowledge_vector_service
+    from server.schemas.knowledge_vector import (
         KnowledgeVectorStoreOnboardRequest,
         KnowledgeVectorStoreOnboardResponse,
         KnowledgeVectorStoreRequest,

@@ -4,7 +4,7 @@
 
 from enum import Enum
 
-from knowledge_memory.server.mock_services import verify_db, verify_foo
+from server.mock_services import verify_db, verify_foo
 
 
 class HealthState(Enum):

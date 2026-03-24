@@ -20,7 +20,7 @@ sys.path.insert(0, src_path)
 @pytest.fixture(scope="session", autouse=True)
 def initialize_database():
     """Initialize database connection before running tests."""
-    from knowledge_memory.server.database.connection import ConnectDB
+    from server.database.connection import ConnectDB
 
     # Use CI environment variable or default to localhost
     db_host = os.environ.get("POSTGRES_HOST", "localhost")

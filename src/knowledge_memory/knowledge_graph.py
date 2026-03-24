@@ -26,8 +26,8 @@ import asyncio
 
 try:
     # Try namespaced import (works when installed as wheel)
-    from knowledge_memory.server.services.knowledge_graph import knowledge_graph_service
-    from knowledge_memory.server.schemas.knowledge_graph import (
+    from server.services.knowledge_graph import knowledge_graph_service
+    from server.schemas.knowledge_graph import (
         KnowledgeGraphStoreRequest,
         KnowledgeGraphStoreResponse,
         KnowledgeGraphQueryRequest,

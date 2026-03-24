@@ -4,7 +4,7 @@
 
 import pytest
 
-from knowledge_memory.server.database.graph_db.agensgraph.models.node import Node
+from server.database.graph_db.agensgraph.models.node import Node
 
 
 class TestNode:

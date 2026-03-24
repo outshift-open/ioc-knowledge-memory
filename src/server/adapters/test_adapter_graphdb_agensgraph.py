@@ -4,7 +4,7 @@
 
 import pytest
 
-from knowledge_memory.server.adapters.adapter_graphdb_agensgraph import AdapterGraphdbAgensgraph
+from server.adapters.adapter_graphdb_agensgraph import AdapterGraphdbAgensgraph
 
 
 class TestAdapterGraphdbAgensgraph:

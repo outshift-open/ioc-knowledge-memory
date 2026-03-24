@@ -13,9 +13,9 @@ from fastapi import status
 from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 
-from knowledge_memory.server.api.endpoints.knowledge_graph import router, internal_router
-from knowledge_memory.server.api.endpoints.knowledge_graph import validation_exception_handler
-from knowledge_memory.server.schemas.knowledge_graph import (
+from server.api.endpoints.knowledge_graph import router, internal_router
+from server.api.endpoints.knowledge_graph import validation_exception_handler
+from server.schemas.knowledge_graph import (
     KnowledgeGraphStoreResponse,
     KnowledgeGraphDeleteResponse,
     KnowledgeGraphQueryResponse,

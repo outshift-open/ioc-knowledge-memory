@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-from knowledge_memory.server.database.connection import ConnectDB
-from knowledge_memory.server.database.graph_db.agensgraph.src.db import (
+from server.database.connection import ConnectDB
+from server.database.graph_db.agensgraph.src.db import (
     GraphDB as AgensGraphDB,
 )
 

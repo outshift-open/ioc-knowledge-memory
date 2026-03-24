@@ -30,6 +30,8 @@ dev = [
 [tool.poetry]
 packages = [
     {include = "knowledge_memory", from = "src"},
+    {include = "server", from = "src"},
+    {include = "app_logging", from = "src"},
 ]
 
 [tool.poetry.dependencies]
