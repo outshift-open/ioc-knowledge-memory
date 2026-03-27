@@ -1,3 +1,7 @@
+# Copyright 2026 Cisco Systems, Inc. and its affiliates
+#
+# SPDX-License-Identifier: Apache-2.0
+
 import json
 import logging
 from typing import Tuple, List, Dict, Any
@@ -84,8 +88,8 @@ class AdapterGraphdbAgensgraph:
                 relationships = self._process_relations(data["records"]["relations"], mas_id, wksp_id, memory_type)
 
             self.logger.info(f"Successfully converted to {len(nodes)} nodes and {len(relationships)} edges")
-            self.logger.info(f"Nodes: {nodes}")
-            self.logger.info(f"Relationships: {relationships}")
+            self.logger.debug(f"Nodes: {nodes}")
+            self.logger.debug(f"Relationships: {relationships}")
             return nodes, relationships
 
         except Exception as e:
@@ -289,7 +293,7 @@ class AdapterGraphdbAgensgraph:
             relations = []
             for edge in edges_data:
                 # Create Relation with required fields and handle potential None values
-                self.logger.info(f"Converting model to Relation for response: {edge}")
+                self.logger.debug(f"Converting model to Relation for response: {edge}")
 
                 # Extract properties from edge - they might be nested in 'properties' key
                 edge_props = edge.get("properties", edge)
@@ -328,12 +332,12 @@ class AdapterGraphdbAgensgraph:
                         embeddings=embeddings,
                     )
                 )
-            self.logger.info(f"Created {len(relations)} relations")
+            self.logger.debug(f"Created {len(relations)} relations")
 
             # Create Concept objects for neighbor nodes
             concepts = []
             for node in nodes_data:
-                self.logger.info(f"Converting model to Concept for response: {node}")
+                self.logger.debug(f"Converting model to Concept for response: {node}")
 
                 # Extract properties from node - they might be nested in 'properties' key
                 node_props = node.get("properties", node)
@@ -367,10 +371,10 @@ class AdapterGraphdbAgensgraph:
                         tags=tags,
                     )
                 )
-            self.logger.info(f"Created {len(concepts)} concepts")
+            self.logger.debug(f"Created {len(concepts)} concepts")
 
             # Create the response record
             records.append(KnowledgeGraphQueryResponseRecord(relationships=relations, concepts=concepts))
 
-        self.logger.info(f"Converted {len(records)} records to KnowledgeGraphQueryResponseRecord objects")
+        self.logger.debug(f"Converted {len(records)} records to KnowledgeGraphQueryResponseRecord objects")
         return records

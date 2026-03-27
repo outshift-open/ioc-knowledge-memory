@@ -1,3 +1,7 @@
+# Copyright 2026 Cisco Systems, Inc. and its affiliates
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Diagnostic API endpoints for TKF standard diagnostics."""
 
 import datetime
@@ -8,7 +12,7 @@ from fastapi.responses import JSONResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel
 
-from app_logging import get_loggers_info, update_log_level
+from knowledge_memory.app_logging import get_loggers_info, update_log_level
 from server.common import app, service_name
 from server.health_check import HealthState, check_self
 

@@ -2,6 +2,13 @@
 
 ioc-knowledge-memory-svc - APIs for knowledge management
 
+## Usage Options
+
+This service can be accessed in two ways:
+
+1. **HTTP API** (for external clients, microservices) - Port 9003
+2. **Direct Library** (for Python in-process, 10x faster) - See [knowledge_memory](src/knowledge_memory/README.md)
+
 ## Prerequisites
 
 - Python 3.8+
@@ -64,4 +71,63 @@ poetry run python main.py
 
 ```bash
 docker-compose up --build
+```
+
+## Version Management
+
+This project uses **pyproject.toml as the single source of truth** for versioning.
+
+### How to Bump Version
+
+**Simply edit one line in [pyproject.toml](pyproject.toml):**
+```toml
+[project]
+version = "0.1.5"  # Change this line only!
+```
+
+**All other locations automatically sync:**
+- ✅ `setup.py` - reads from pyproject.toml
+- ✅ `src/knowledge_memory/__init__.py` - uses `importlib.metadata`
+- ✅ `.github/workflows/ci.yaml` - dynamically reads and updates for dev builds
+
+**No manual sync needed!** The version is automatically propagated to:
+- Package metadata when building
+- Runtime `__version__` attribute
+- CI/CD dev builds (adds `.devYYYYMMDDHHMMSS` suffix)
+
+### Version Format
+
+We follow [PEP 440](https://peps.python.org/pep-0440/) versioning:
+- Release versions: `0.1.4`, `0.2.0`, `1.0.0`
+- Dev builds (CI): `0.1.4.dev20260316120000`
+
+## Python Library (New!)
+
+For **in-process, high-performance access** without HTTP overhead:
+
+```python
+from knowledge_memory import upsert_knowledge_graph, query_knowledge_graph
+from knowledge_memory import onboard_vector_store, upsert_vector_store
+
+# Direct function calls - no HTTP!
+response = upsert_knowledge_graph(
+    mas_id="agent-1",
+    wksp_id="workspace-1",
+    concepts=[{"id": "c1", "name": "Python"}]
+)
+```
+
+**Benefits:**
+- 🚀 **10x faster** than HTTP API (no network overhead)
+- 🐍 **Type-safe** Python exceptions
+- 🔧 **Same features** as HTTP API
+- ✅ **No regression** - HTTP API still works
+
+**Documentation:** See [src/knowledge_memory/README.md](src/knowledge_memory/README.md)
+
+**Quick test:**
+```bash
+python src/knowledge_memory/examples.py     # Run examples
+pytest tests/test_knowledge_memory.py -v    # Run tests
+python3 validate_knowledge_memory.py        # Validate structure
 ```

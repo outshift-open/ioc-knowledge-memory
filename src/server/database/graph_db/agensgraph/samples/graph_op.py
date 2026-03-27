@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+
+# Copyright 2026 Cisco Systems, Inc. and its affiliates
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Graph Operations Example
  ioc-knowledge-memory-svc % python -m server.database.graph_db.agensgraph.samples.graph_op
@@ -12,7 +17,7 @@ import logging
 import sys
 from pathlib import Path
 
-from app_logging import setup_logging
+from knowledge_memory.app_logging import setup_logging
 
 # Add the project root to the Python path
 project_root = Path(__file__).resolve().parents[3]

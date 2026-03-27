@@ -1,10 +1,10 @@
-name: ci-tkf-data-logic-svc CI workflow
+name: CI/CD Pipeline
 
 on:
   # we want pull requests so we can build(test) but not push to image registry
   push:
     branches:
-      - "main"
+      - "**"
 
     # only build when important files change
     #paths:
@@ -40,23 +40,23 @@ jobs:
       #   password: ${{ secrets.GHCR_TOKEN }}
 
     services:
-      tkf-relational-db:
-        image: timescale/timescaledb-ha:pg17
+      ioc-knowledge-db:
+        image: ghcr.io/cisco-eti/ioc-knowledge-memory-svc-db:1.0
         env:
-          POSTGRES_DB: tkf
+          POSTGRES_DB: ioc-knowledge-db
           POSTGRES_USER: postgresUser
           POSTGRES_PASSWORD: postgresPW
         ports:
-          - 5455:5432
+          - 5456:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgresUser -d ioc-knowledge-db"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           # The branch, tag or SHA to checkout, otherwise, uses the default branch.
           ref: ${{ github.ref }}
@@ -109,6 +109,10 @@ jobs:
         run: |
           poetry install
 
+      - name: Install knowledge-memory package in editable mode
+        run: |
+          poetry run pip install -e .
+
       ################################## Linting ####################################
       ###############################################################################
 
@@ -119,30 +123,117 @@ jobs:
       ################################## Unit Test ##################################
       ###############################################################################
 
-      - name: Wait for PostgreSQL
+      - name: Wait for PostgreSQL (ioc-knowledge-db)
         env:
-          POSTGRES_DB: tkf
+          POSTGRES_DB: ioc-knowledge-db
           POSTGRES_USER: postgresUser
           POSTGRES_PASSWORD: postgresPW
-          POSTGRES_HOST: tkf-relational-db
+          POSTGRES_HOST: ioc-knowledge-db
           POSTGRES_PORT: 5432
         run: |
           apt-get update && apt-get install -y postgresql-client
           until pg_isready -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER; do
-            echo "Waiting for PostgreSQL..."
+            echo "Waiting for ioc-knowledge-db PostgreSQL..."
             sleep 2
           done
-          echo "PostgreSQL is ready!"
+          echo "ioc-knowledge-db PostgreSQL is ready!"
 
       - name: Run Unit Tests
         env:
-          POSTGRES_DB: tkf
+          POSTGRES_DB: ioc-knowledge-db
           POSTGRES_USER: postgresUser
           POSTGRES_PASSWORD: postgresPW
-          POSTGRES_HOST: tkf-relational-db
+          POSTGRES_HOST: ioc-knowledge-db
           POSTGRES_PORT: 5432
         run: |
           bash scripts/unit-test.sh
+
+  #################### Python Package Publish to Artifactory ######################
+  ###############################################################################
+  publish-knowledge-memory-package:
+    name: Publish knowledge_memory Package to Artifactory
+    needs: [checkout-unit-tests]
+    if: github.ref == 'refs/heads/clawbee'
+    runs-on:
+      group: ${{ vars.DEFAULT_ARC_RUNNERS }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Import Vault Secrets
+        uses: hashicorp/vault-action@d1720f055e0635fd932a1d2a48f87a666a57906c # v2.7.5
+        with:
+          url: ${{ vars.KEEPER_URL }}
+          method: approle
+          roleId: ${{ secrets.VAULT_APPROLE_ROLE_ID }}
+          secretId: ${{ secrets.VAULT_APPROLE_SECRET_ID }}
+          namespace: ${{ vars.VAULT_NAMESPACE }}
+          secrets: |
+            ${{ vars.VAULT_SECRET_PATH }}  ARTIFACTORY_BASE_URL | ARTIFACTORY_BASE_URL ;
+            ${{ vars.VAULT_SECRET_PATH }}  ARTIFACTORY_DEVHUB_PYTHON_TOKEN | ARTIFACTORY_DEVHUB_PYTHON_TOKEN ;
+            ${{ vars.VAULT_SECRET_PATH }}  ARTIFACTORY_USER | ARTIFACTORY_USER ;
+
+      - name: Setup Python
+        uses: actions/setup-python@65d7f2d534ac1bc67fcd62888c5f4f3d2cb2b236 # v4.7.1
+        with:
+          python-version: '3.11'
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install setuptools wheel twine
+
+      - name: Configure Artifactory credentials
+        run: |
+          cat > ~/.pypirc << EOF
+          [distutils]
+          index-servers = local
+          [local]
+          repository: https://${{ env.ARTIFACTORY_BASE_URL }}/artifactory/api/pypi/outshift-pypi
+          username: ${{ env.ARTIFACTORY_USER }}
+          password: ${{ env.ARTIFACTORY_DEVHUB_PYTHON_TOKEN }}
+          EOF
+
+      - name: Build and publish package
+        run: |
+          # Auto-version with timestamp for unique builds (PEP 440 compliant)
+          export TIMESTAMP=$(date +%Y%m%d%H%M%S)
+
+          # Read current version from pyproject.toml and update it
+          python << 'EOF'
+          import tomllib
+          import re
+          import os
+
+          # Read current version
+          with open('pyproject.toml', 'rb') as f:
+              data = tomllib.load(f)
+              current_version = data['project']['version']
+
+          # Read file content
+          with open('pyproject.toml', 'r') as f:
+              content = f.read()
+
+          # Update version with dev timestamp
+          timestamp = os.environ.get('TIMESTAMP', '')
+          new_version = f'{current_version}.dev{timestamp}'
+          content = re.sub(
+              r'version = "[^"]*"',
+              f'version = "{new_version}"',
+              content,
+              count=1
+          )
+
+          # Write back
+          with open('pyproject.toml', 'w') as f:
+              f.write(content)
+
+          print(f"Updated version from {current_version} to {new_version}")
+          EOF
+
+          cat pyproject.toml | grep "^version"
+          python setup.py bdist_wheel
+          twine upload -r local dist/*
 
   #################### Docker build & push ######################
   ###############################################################################
@@ -178,9 +269,9 @@ jobs:
       dockerfile: Dockerfile
       ### REQUIRED
       ### ENABLE ONE OR BOTH REGISTRIES
-      ### tell docker where to push.
-      ecr-enabled: true
-      ghcr-enabled: true
+      ### tell docker where to push. Only push on main branch.
+      ecr-enabled: ${{ github.ref == 'refs/heads/main' }}
+      ghcr-enabled: ${{ github.ref == 'refs/heads/main' }}
       ghcr-org-registry: ${{ vars.GHCR_REGISTRY }}
 
   ################################# Corona & blackduck ###########################
@@ -284,6 +375,7 @@ jobs:
     # This should be an array of ALL active jobs that are used/run
     needs: [
         checkout-unit-tests,
+        publish-knowledge-memory-package,
         call-docker-build-push,
         # call-helm-publish,
         # call-trigger-cd,

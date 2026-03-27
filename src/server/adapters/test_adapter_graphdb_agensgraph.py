@@ -1,3 +1,7 @@
+# Copyright 2026 Cisco Systems, Inc. and its affiliates
+#
+# SPDX-License-Identifier: Apache-2.0
+
 import pytest
 
 from server.adapters.adapter_graphdb_agensgraph import AdapterGraphdbAgensgraph
