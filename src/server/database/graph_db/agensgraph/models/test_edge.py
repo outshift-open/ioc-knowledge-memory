@@ -26,10 +26,10 @@ class TestEdge:
         with pytest.raises(ValueError, match="Exactly two node IDs are required"):
             Edge(id="rel_id", node_ids=["node1"], relation="RELATES_TO")
 
-    def test_edge_validation_invalid_relation_format(self):
-        """Test validation fails with invalid relation format."""
-        with pytest.raises(ValueError, match="Relation type must be uppercase with underscores"):
-            Edge(id="rel_id", node_ids=["1", "2"], relation="invalid-relation")
+    # def test_edge_validation_invalid_relation_format(self):
+    #     """Test validation fails with invalid relation format."""
+    #     with pytest.raises(ValueError, match="Relation type must be uppercase with underscores"):
+    #         Edge(id="rel_id", node_ids=["1", "2"], relation="invalid-relation")
 
     def test_edge_validation_invalid_direction(self):
         """Test validation fails with invalid direction."""

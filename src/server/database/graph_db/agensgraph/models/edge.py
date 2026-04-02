@@ -40,9 +40,9 @@ class Edge:
             raise ValueError("Exactly two node IDs are required")
         if not all(self.node_ids):
             raise ValueError("Node IDs cannot be empty")
-        # relation type as uppercase with underscores
-        if not self.relation or not re.match(r"^[A-Z0-9_]+$", self.relation):
-            raise ValueError("Relation type must be uppercase with underscores")
+        # Note: intentionally turning off the regrex validation below for relation type for clawbee release
+        if not self.relation:
+            raise ValueError("Relation type must not be empty")
         if self.direction not in ("->", "<-", "--"):
             raise ValueError("Direction must be one of: '->', '<-', '--'")
         self._validate_properties()
