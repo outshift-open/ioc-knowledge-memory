@@ -178,62 +178,86 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install build tools
+      - name: Install Poetry
         run: |
           python -m pip install --upgrade pip
-          pip install setuptools wheel twine
+          python -m pip install poetry
+
+      - name: Get package version
+        id: version
+        run: |
+          # Extract version from pyproject.toml
+          VERSION=$(python -c "import tomllib; f=open('pyproject.toml','rb'); print(tomllib.load(f)['project']['version'])")
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Publishing version: $VERSION"
+
+      - name: Configure Artifactory repository
+        run: |
+          poetry config repositories.artifactory https://${{ env.ARTIFACTORY_BASE_URL }}/artifactory/api/pypi/outshift-pypi
 
       - name: Configure Artifactory credentials
         run: |
-          cat > ~/.pypirc << EOF
-          [distutils]
-          index-servers = local
-          [local]
-          repository: https://${{ env.ARTIFACTORY_BASE_URL }}/artifactory/api/pypi/outshift-pypi
-          username: ${{ env.ARTIFACTORY_USER }}
-          password: ${{ env.ARTIFACTORY_DEVHUB_PYTHON_TOKEN }}
-          EOF
+          poetry config http-basic.artifactory ${{ env.ARTIFACTORY_USER }} ${{ env.ARTIFACTORY_DEVHUB_PYTHON_TOKEN }}
 
-      - name: Build and publish package
+      - name: Check if version already exists in Artifactory
+        id: exists
+        env:
+          ART_USER: ${{ env.ARTIFACTORY_USER }}
+          ART_TOKEN: ${{ env.ARTIFACTORY_DEVHUB_PYTHON_TOKEN }}
+          ART_HOST: ${{ env.ARTIFACTORY_BASE_URL }}
+          VER: ${{ env.VERSION }}
         run: |
-          # Auto-version with timestamp for unique builds (PEP 440 compliant)
-          export TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          set -euo pipefail
 
-          # Read current version from pyproject.toml and update it
-          python << 'EOF'
-          import tomllib
-          import re
-          import os
+          # Get package name from pyproject.toml
+          PKG_NAME=$(python -c "import tomllib; f=open('pyproject.toml','rb'); print(tomllib.load(f)['project']['name'])")
+          # Normalize package name (replace underscores with hyphens for URL)
+          PKG_NAME_NORMALIZED=$(echo "$PKG_NAME" | tr '_' '-')
 
-          # Read current version
-          with open('pyproject.toml', 'rb') as f:
-              data = tomllib.load(f)
-              current_version = data['project']['version']
+          SIMPLE_URL="https://${ART_HOST}/artifactory/api/pypi/outshift-pypi/simple/${PKG_NAME_NORMALIZED}/"
 
-          # Read file content
-          with open('pyproject.toml', 'r') as f:
-              content = f.read()
+          echo "Checking: $SIMPLE_URL"
 
-          # Update version with dev timestamp
-          timestamp = os.environ.get('TIMESTAMP', '')
-          new_version = f'{current_version}.dev{timestamp}'
-          content = re.sub(
-              r'version = "[^"]*"',
-              f'version = "{new_version}"',
-              content,
-              count=1
-          )
+          # If package doesn't exist yet, Artifactory may return 404.
+          HTTP_CODE=$(curl -sS -u "${ART_USER}:${ART_TOKEN}" -o /tmp/simple.html -w "%{http_code}" "$SIMPLE_URL" || true)
 
-          # Write back
-          with open('pyproject.toml', 'w') as f:
-              f.write(content)
+          if [ "$HTTP_CODE" = "404" ]; then
+            echo "No simple index found (package likely not published yet)."
+            echo "exists=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
-          print(f"Updated version from {current_version} to {new_version}")
-          EOF
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "Failed to query simple index (HTTP $HTTP_CODE)."
+            cat /tmp/simple.html || true
+            exit 1
+          fi
 
-          cat pyproject.toml | grep "^version"
-          python setup.py bdist_wheel
-          twine upload -r local dist/*
+          # Look for artifacts that contain "-<version>" in filename
+          if grep -qiE "[-_]${VER}([-.+]|%2B)" /tmp/simple.html; then
+            echo "Version ${VER} appears to already exist. Skipping publish."
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Version ${VER} not found. Will publish."
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build package
+        if: steps.exists.outputs.exists != 'true'
+        run: poetry build
+
+      - name: Publish to Artifactory
+        if: steps.exists.outputs.exists != 'true'
+        run: poetry publish -r artifactory
+
+      - name: Output published version
+        run: |
+          if [ "${{ steps.exists.outputs.exists }}" = "true" ]; then
+            echo "ℹ️ Skipped publishing knowledge_memory version ${{ env.VERSION }} (already exists)."
+          else
+            echo "✅ Successfully published knowledge_memory version ${{ env.VERSION }}"
+          fi
 
   #################### Docker build & push ######################
   ###############################################################################
