@@ -4,14 +4,9 @@ on:
   # we want pull requests so we can build(test) but not push to image registry
   push:
     branches:
-      - "**"
-
-    # only build when important files change
-    #paths:
-    #  - 'app/**'
-    #  - '.github/workflows/ci.yaml'
-    #tags:
-    #  - "[0-9]+.[0-9]+.[0-9]+"
+      - main
+    tags:
+      - "v*"
   pull_request:
     branches:
       - "main"
@@ -19,62 +14,24 @@ on:
 
 # Grant read access for GITHUB_TOKEN on all jobs
 permissions:
-  id-token: write # This is required for requesting the JWT
   contents: read # This is required for actions/checkout
-  packages: write # needed to push docker image to gar or ecr
 
 jobs:
   ################################## Code Checkout ##############################
   ###############################################################################
-  checkout-unit-tests:
-    name: checkout & unit test
-    runs-on:
-      group: ${{ vars.DEFAULT_ARC_RUNNERS }}
+  checkout-lint:
+    name: checkout & lint
+    runs-on: ubuntu-latest
     container:
-      # TODO: Replace with hardened sre-python image
       image: python:3.11-slim
-      # image: ${{ vars.DEFAULT_CONTAINER_RUNNER }}
       options: --user root
-      # credentials:
-      #   username: ${{ secrets.GHCR_USERNAME }}
-      #   password: ${{ secrets.GHCR_TOKEN }}
-
-    services:
-      ioc-knowledge-db:
-        image: ghcr.io/cisco-eti/ioc-knowledge-memory-svc-db:1.0
-        env:
-          POSTGRES_DB: ioc-knowledge-db
-          POSTGRES_USER: postgresUser
-          POSTGRES_PASSWORD: postgresPW
-        ports:
-          - 5456:5432
-        options: >-
-          --health-cmd "pg_isready -U postgresUser -d ioc-knowledge-db"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
-          # The branch, tag or SHA to checkout, otherwise, uses the default branch.
           ref: ${{ github.ref }}
-          # Relative path under $GITHUB_WORKSPACE to place the repository
-          path: ""
-          # Whether to execute `git clean -ffdx && git reset --hard HEAD` before fetching
-          # Default: true
           clean: true
-          # Whether to download Git-LFS files
-          # Default: false
-          lfs: ""
-          # Whether to checkout submodules: `true` to checkout submodules or `recursive` to
-          # recursively checkout submodules.
-          # Default: false
-          submodules: ""
-
-      ################################## Setup Python & Poetry #######################
-      ###############################################################################
 
       - name: Check Python version
         run: |
@@ -85,9 +42,6 @@ jobs:
           python3 -m pip install --upgrade pip || python -m pip install --upgrade pip
           python3 -m pip install poetry || python -m pip install poetry
           poetry --version
-
-      ################################## Install Dependencies #######################
-      ###############################################################################
 
       - name: Setup virtual environment
         run: |
@@ -109,69 +63,25 @@ jobs:
         run: |
           poetry install
 
-      - name: Install knowledge-memory package in editable mode
-        run: |
-          poetry run pip install -e .
-
-      ################################## Linting ####################################
-      ###############################################################################
-
       - name: Run Linting
         run: |
           bash scripts/lint.sh
 
-      ################################## Unit Test ##################################
-      ###############################################################################
-
-      - name: Wait for PostgreSQL (ioc-knowledge-db)
-        env:
-          POSTGRES_DB: ioc-knowledge-db
-          POSTGRES_USER: postgresUser
-          POSTGRES_PASSWORD: postgresPW
-          POSTGRES_HOST: ioc-knowledge-db
-          POSTGRES_PORT: 5432
-        run: |
-          apt-get update && apt-get install -y postgresql-client
-          until pg_isready -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER; do
-            echo "Waiting for ioc-knowledge-db PostgreSQL..."
-            sleep 2
-          done
-          echo "ioc-knowledge-db PostgreSQL is ready!"
-
-      - name: Run Unit Tests
-        env:
-          POSTGRES_DB: ioc-knowledge-db
-          POSTGRES_USER: postgresUser
-          POSTGRES_PASSWORD: postgresPW
-          POSTGRES_HOST: ioc-knowledge-db
-          POSTGRES_PORT: 5432
-        run: |
-          bash scripts/unit-test.sh
-
   #################### Python Package Publish to Artifactory ######################
   ###############################################################################
   publish-knowledge-memory-package:
-    name: Publish knowledge_memory Package to Artifactory
-    needs: [checkout-unit-tests]
-    if: github.ref == 'refs/heads/clawbee'
-    runs-on:
-      group: ${{ vars.DEFAULT_ARC_RUNNERS }}
+    name: Publish Package to PyPI
+    needs: [checkout-lint]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    # Recommended: protect publishing with a GitHub Environment (optional)
+    # environment: pypi
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-
-      - name: Import Vault Secrets
-        uses: hashicorp/vault-action@d1720f055e0635fd932a1d2a48f87a666a57906c # v2.7.5
-        with:
-          url: ${{ vars.KEEPER_URL }}
-          method: approle
-          roleId: ${{ secrets.VAULT_APPROLE_ROLE_ID }}
-          secretId: ${{ secrets.VAULT_APPROLE_SECRET_ID }}
-          namespace: ${{ vars.VAULT_NAMESPACE }}
-          secrets: |
-            ${{ vars.VAULT_SECRET_PATH }}  ARTIFACTORY_BASE_URL | ARTIFACTORY_BASE_URL ;
-            ${{ vars.VAULT_SECRET_PATH }}  ARTIFACTORY_DEVHUB_PYTHON_TOKEN | ARTIFACTORY_DEVHUB_PYTHON_TOKEN ;
-            ${{ vars.VAULT_SECRET_PATH }}  ARTIFACTORY_USER | ARTIFACTORY_USER ;
 
       - name: Setup Python
         uses: actions/setup-python@65d7f2d534ac1bc67fcd62888c5f4f3d2cb2b236 # v4.7.1
@@ -181,215 +91,54 @@ jobs:
       - name: Install Poetry
         run: |
           python -m pip install --upgrade pip
-          python -m pip install poetry
+          pip install poetry
+          poetry --version
 
-      - name: Get package version
-        id: version
+      - name: Configure Poetry
         run: |
-          # Extract version from pyproject.toml
-          VERSION=$(python -c "import tomllib; f=open('pyproject.toml','rb'); print(tomllib.load(f)['project']['version'])")
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Publishing version: $VERSION"
+          poetry config virtualenvs.create true --local
+          poetry config virtualenvs.in-project true --local
 
-      - name: Configure Artifactory repository
+      - name: Validate tag matches pyproject version
         run: |
-          poetry config repositories.artifactory https://${{ env.ARTIFACTORY_BASE_URL }}/artifactory/api/pypi/outshift-pypi
+          TAG_NAME="${{ github.ref_name }}"
+          TAG_VERSION="${TAG_NAME#v}"
 
-      - name: Configure Artifactory credentials
-        run: |
-          poetry config http-basic.artifactory ${{ env.ARTIFACTORY_USER }} ${{ env.ARTIFACTORY_DEVHUB_PYTHON_TOKEN }}
+          echo "Git tag: $TAG_NAME"
+          echo "Normalized tag version: $TAG_VERSION"
 
-      - name: Check if version already exists in Artifactory
-        id: exists
-        env:
-          ART_USER: ${{ env.ARTIFACTORY_USER }}
-          ART_TOKEN: ${{ env.ARTIFACTORY_DEVHUB_PYTHON_TOKEN }}
-          ART_HOST: ${{ env.ARTIFACTORY_BASE_URL }}
-          VER: ${{ env.VERSION }}
-        run: |
-          set -euo pipefail
+          export TAG_VERSION
 
-          # Get package name from pyproject.toml
-          PKG_NAME=$(python -c "import tomllib; f=open('pyproject.toml','rb'); print(tomllib.load(f)['project']['name'])")
-          # Normalize package name (replace underscores with hyphens for URL)
-          PKG_NAME_NORMALIZED=$(echo "$PKG_NAME" | tr '_' '-')
+          python << 'EOF'
+          import os
+          import sys
+          import tomllib
 
-          SIMPLE_URL="https://${ART_HOST}/artifactory/api/pypi/outshift-pypi/simple/${PKG_NAME_NORMALIZED}/"
+          tag_version = os.environ["TAG_VERSION"]
 
-          echo "Checking: $SIMPLE_URL"
+          with open("pyproject.toml", "rb") as f:
+              data = tomllib.load(f)
 
-          # If package doesn't exist yet, Artifactory may return 404.
-          HTTP_CODE=$(curl -sS -u "${ART_USER}:${ART_TOKEN}" -o /tmp/simple.html -w "%{http_code}" "$SIMPLE_URL" || true)
+          pyproject_version = data["project"]["version"]
 
-          if [ "$HTTP_CODE" = "404" ]; then
-            echo "No simple index found (package likely not published yet)."
-            echo "exists=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
+          print(f"pyproject.toml version: {pyproject_version}")
+          print(f"tag version: {tag_version}")
 
-          if [ "$HTTP_CODE" -ge 400 ]; then
-            echo "Failed to query simple index (HTTP $HTTP_CODE)."
-            cat /tmp/simple.html || true
-            exit 1
-          fi
+          if pyproject_version != tag_version:
+              print(
+                  f"Version mismatch: pyproject.toml has '{pyproject_version}' but Git tag is '{tag_version}'",
+                  file=sys.stderr
+              )
+              sys.exit(1)
 
-          # Look for artifacts that contain "-<version>" in filename
-          if grep -qiE "[-_]${VER}([-.+]|%2B)" /tmp/simple.html; then
-            echo "Version ${VER} appears to already exist. Skipping publish."
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "Version ${VER} not found. Will publish."
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
+          print("Version validation passed.")
+          EOF
 
       - name: Build package
-        if: steps.exists.outputs.exists != 'true'
         run: poetry build
 
-      - name: Publish to Artifactory
-        if: steps.exists.outputs.exists != 'true'
-        run: poetry publish -r artifactory
-
-      - name: Output published version
-        run: |
-          if [ "${{ steps.exists.outputs.exists }}" = "true" ]; then
-            echo "ℹ️ Skipped publishing knowledge_memory version ${{ env.VERSION }} (already exists)."
-          else
-            echo "✅ Successfully published knowledge_memory version ${{ env.VERSION }}"
-          fi
-
-  #################### Docker build & push ######################
-  ###############################################################################
-  call-docker-build-push:
-    name: Call Docker Build Panoptica Scan & Push
-    needs: [checkout-unit-tests]
-    uses: cisco-eti/gh-reusable-workflows/.github/workflows/build-push-docker.yaml@production
-
-    secrets:
-      # Only needed if with:ecr-enabled or with:gar-enabled is true below
-      vault-approle-role-id: ${{ secrets.VAULT_APPROLE_ROLE_ID }}
-      vault-approle-secret-id: ${{ secrets.VAULT_APPROLE_SECRET_ID }}
-      # These two secrets are ONLY needed when you are trying to access GAR/GCR in a venture specific project (e.g. 'k8sec-dev' for example).
-      # The values should be consistent with the vault namespace (set by 'VAULT_VENTURE_NAMESPACE' var)
-      # vault-venture-approle-role-id: ${{secrets.VAULT_SECURECN_APPROLE_ROLE_ID}}
-      # vault-venture-approle-secret-id: ${{secrets.VAULT_SECURECN_APPROLE_SECRET_ID}}
-      #######
-      ghcr-username: ${{ secrets.GHCR_USERNAME }}
-      ghcr-token: ${{ secrets.GHCR_TOKEN }}
-      ghcr-org-token: ${{ secrets.GHCR_TOKEN }}
-
-    with:
-      ### REQUIRED
-      runner-group: ${{ vars.DEFAULT_ARC_RUNNERS }}
-      ### Docker image name
-      image-name: "${{ github.event.repository.name }}"
-
-      ### path to where docker should copy files into image
-      ### defaults to root of repository (.)
-      # context: .
-
-      ### Dockerfile alternate name. Default is Dockerfile (relative to context path)
-      dockerfile: Dockerfile
-      ### REQUIRED
-      ### ENABLE ONE OR BOTH REGISTRIES
-      ### tell docker where to push. Only push on main branch.
-      ecr-enabled: ${{ github.ref == 'refs/heads/main' }}
-      ghcr-enabled: ${{ github.ref == 'refs/heads/main' }}
-      ghcr-org-registry: ${{ vars.GHCR_REGISTRY }}
-
-  ################################# Corona & blackduck ###########################
-  ################################################################################
-  # call-corona-blackduck-scan:
-  #   name: Call Corona & Blackduck scan
-  #   if: github.ref == 'refs/heads/main'
-  #   needs: [ call-docker-build-push ]
-  #   uses: cisco-eti/gh-reusable-workflows/.github/workflows/corona-blackduck-scan.yaml@production
-
-  #   secrets:
-  #     vault-approle-role-id: ${{ secrets.VAULT_APPROLE_ROLE_ID }}
-  #     vault-approle-secret-id: ${{ secrets.VAULT_APPROLE_SECRET_ID }}
-  #     # GHCR Login for docker build runner
-  #     ghcr-username: ${{ secrets.GHCR_USERNAME }}
-  #     ghcr-token: ${{ secrets.GHCR_TOKEN }}
-  #     # GHCR Login for docker scan
-  #     ghcr-org-username: ${{ secrets.GHCR_USERNAME }}
-  #     ghcr-org-token: ${{ secrets.GHCR_TOKEN }}
-
-  #   with:
-  #     runner: ${{ vars.DEFAULT_ARC_RUNNERS }}
-  #     runner-docker-image: ${{ vars.DEFAULT_CONTAINER_RUNNER }}
-  #     enable-corona: true
-  #     enable-blackduck: true
-  #     corona-product-name: ${{ vars.CORONA_PRODUCT_NAME }}
-  #     corona-product-id: ${{ vars.CORONA_PRODUCT_ID }}
-  #     corona-release-id: ${{ vars.CORONA_RELEASE_ID }}
-  #     corona-csdl-id: ${{ vars.CORONA_CSDL_ID }}
-  #     corona-security-contact: ${{ vars.CORONA_SECURITY_CONTACT }}
-  #     corona-engineering-contact: ${{ vars.CORONA_ENGINEERING_CONTACT }}
-  #     corona-image-admins: ${{ vars.CORONA_IMAGE_ADMINS }}
-  #     ghcr-org-registry: ${{ vars.GHCR_REGISTRY }}
-  #     # optional
-  #     image-name: "eti-sre/${{ github.event.repository.name }}"
-  #     #image-tag: ""
-
-  ################################## SonarQube  Scan ##############################
-  #################################################################################
-  #call-sonar-scan:
-  #  name: Call SonarQube scan
-  #  needs: [ call-corona-blackduck-scan ]
-  #  uses: cisco-eti/gh-reusable-workflows/.github/workflows/sonar-scan.yaml@production
-  #  with:
-  #    sonar-properties-file: "./build/sonar-project.properties"
-  #  secrets:
-  #    vault-approle-role-id: ${{ secrets.VAULT_APPROLE_ROLE_ID }}
-  #    vault-approle-secret-id: ${{ secrets.VAULT_APPROLE_SECRET_ID }}
-  #    ghcr-username: ${{ secrets.GHCR_USERNAME }}
-  #    ghcr-token: ${{ secrets.GHCR_TOKEN }}
-
-  ################################## Helm Publish #################################
-  #################################################################################
-#  call-helm-publish:
-#    name: Helm publish
-#    needs: [call-docker-build-push]
-#    uses: cisco-eti/gh-reusable-workflows/.github/workflows/helm-publish.yaml@production
-#    with:
-#      runner-group: ${{ vars.DEFAULT_ARC_RUNNERS }}
-#      enable-private-ecr: false
-#      enable-public-ecr: false
-#      chart-path: "deploy/charts/${{ github.event.repository.name }}"
-#      #ecr-public-registry-alias: ${{ vars.ECR_PUBLIC_REGISTRY_ALIAS}}
-#      enable-chartmuseum: true
-#    secrets:
-#      # GHCR Login for docker build runner
-#      ghcr-username: ${{ secrets.GHCR_USERNAME }}
-#      ghcr-token: ${{ secrets.GHCR_TOKEN }}
-#      vault-approle-role-id: ${{ secrets.VAULT_APPROLE_ROLE_ID }}
-#      vault-approle-secret-id: ${{ secrets.VAULT_APPROLE_SECRET_ID }}
-
-  ################################## Trigger Deployment ###########################
-  #################################################################################
-#  call-trigger-cd:
-#    name: Trigger CD
-#    needs: [call-helm-publish]
-#    # Run only on main branch
-#    # github.ref == 'refs/heads/main'
-#    if: false
-#    uses: cisco-eti/gh-reusable-workflows/.github/workflows/trigger-deploy.yaml@production
-#    with:
-#      deployment-repo: "${{ github.repository }}-deployment"
-#      # Always we update "a" and "b" deployment values file, value is optional arg
-#      client-payload: '{"app-repository": "${{ github.repository }}", "values-file-path": "applications/${{ github.event.repository.name }}", "property-path": "tagversion", "value": ""}'
-#
-#    secrets:
-#      # GHCR Login for docker build runner
-#      ghcr-username: ${{ secrets.GHCR_USERNAME }}
-#      ghcr-token: ${{ secrets.GHCR_TOKEN }}
-#      # GHCR Login for docker scan
-#      ghcr-org-username: ${{ secrets.GHCR_USERNAME }}
-#      ghcr-org-token: ${{ secrets.GHCR_TOKEN }}
-#      vault-approle-role-id: ${{ secrets.VAULT_APPROLE_ROLE_ID }}
-#      vault-approle-secret-id: ${{ secrets.VAULT_APPROLE_SECRET_ID }}
+      - name: Publish package to PyPI (Trusted Publishing)
+        uses: pypa/gh-action-pypi-publish@release/v1
 
   ################################## Send Status for PR Checks ###########################
   ########################################################################################
@@ -398,15 +147,11 @@ jobs:
     name: Reusable Workflow CI Status
     # This should be an array of ALL active jobs that are used/run
     needs: [
-        checkout-unit-tests,
+        checkout-lint,
         publish-knowledge-memory-package,
-        call-docker-build-push,
-        # call-helm-publish,
-        # call-trigger-cd,
       ]
     if: always()
-    runs-on:
-      group: ${{ vars.DEFAULT_ARC_RUNNERS }}
+    runs-on: ubuntu-latest
     steps:
       - name: report failure
         if: ${{ cancelled() || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'failure') }}
