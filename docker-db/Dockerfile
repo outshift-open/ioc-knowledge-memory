@@ -25,4 +25,4 @@ COPY --from=builder /usr/local/lib/postgresql/vector.so /usr/local/lib/postgresq
 COPY --from=builder /usr/local/share/postgresql/extension/vector* /usr/local/share/postgresql/extension/
 
 # Copy initialization script
-COPY init-extensions.sql /docker-entrypoint-initdb.d/01-init-extensions.sql
+COPY docker-db/init-extensions.sql /docker-entrypoint-initdb.d/01-init-extensions.sql
