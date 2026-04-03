@@ -15,6 +15,7 @@ on:
 # Grant read access for GITHUB_TOKEN on all jobs
 permissions:
   contents: read # This is required for actions/checkout
+  packages: write # needed to push to GHCR
 
 jobs:
   ################################## Code Checkout ##############################
@@ -66,6 +67,35 @@ jobs:
       - name: Run Linting
         run: |
           bash scripts/lint.sh
+
+  ################################## Build Docker image ##############################
+  ###############################################################################
+  build-db-docker-image:
+    if: github.event_name == 'workflow_dispatch'
+    name: Build db Docker image
+    needs: [checkout-lint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build docker-db image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker-db/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/ioc-knowledge-memory-svc-db:0.1.0
 
   #################### Python Package Publish to Artifactory ######################
   ###############################################################################
@@ -148,6 +178,7 @@ jobs:
     # This should be an array of ALL active jobs that are used/run
     needs: [
         checkout-lint,
+        build-db-docker-image,
         publish-knowledge-memory-package,
       ]
     if: always()
