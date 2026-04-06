@@ -1,6 +1,6 @@
 ### Dockefile for the Databases (Agensgraph + PgVector + Postgres)
 
-Build the Docker image for DB. Tag and Push image to ghcr.io/cisco-eti
+Build the Docker image for DB. Tag and Push image to ghcr.io/outshift-open
 ```
 docker-compose up --build
 ```
