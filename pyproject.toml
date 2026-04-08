@@ -1,7 +1,12 @@
 [project]
 name = "ioc-knowledge-memory"
-version = "0.2.1"
-description = "ioc-knowledge-memory-svc"
+version = "0.2.2"
+description = "Package for IoC knowledge management"
+authors = [
+    {name = "Outshift by Cisco",email = "outshiftbycisco@cisco.com"}
+]
+homepage = "https://github.com/outshift-open/ioc-knowledge-memory"
+repository = "https://github.com/outshift-open/ioc-knowledge-memory"
 readme = "README.md"
 requires-python = ">=3.10,<4.0.0"
 dependencies = [
