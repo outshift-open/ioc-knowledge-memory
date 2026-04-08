@@ -16,7 +16,7 @@ RUN apk add --no-cache \
 WORKDIR /tmp
 RUN git clone --branch v0.8.1 https://github.com/pgvector/pgvector.git
 WORKDIR /tmp/pgvector
-RUN make USE_PGXS=1
+RUN make USE_PGXS=1 OPTFLAGS=""
 RUN make USE_PGXS=1 install
 
 # Build TimescaleDB
