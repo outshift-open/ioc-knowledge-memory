@@ -7,39 +7,29 @@
 import datetime
 import os
 
-from fastapi import Response, status
+from fastapi import APIRouter, Response, status
 from fastapi.responses import JSONResponse
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
+from prometheus_client import REGISTRY
 
-from knowledge_memory.app_logging import get_loggers_info, update_log_level
-from server.common import app, service_name
+from app_logging import get_loggers_info, update_log_level
+from server.common import service_name
 from server.health_check import HealthState, check_self
 
-
-# Prometheus metrics endpoint
-@app.get("/metrics", include_in_schema=False)
-async def prometheus_metrics_endpoint():
-    """Prometheus metrics endpoint.
-
-    Returns:
-        Prometheus metrics in text format
-    """
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+diagnostics_router = APIRouter()
 
 
 # Pydantic models for request/response validation
 class LogLevelUpdate(BaseModel):
     """Model for updating log level."""
 
-    module_name: str
-    log_level: str
+    model_config = ConfigDict(populate_by_name=True)
+
+    module_name: str = Field(alias="module-name")
+    log_level: str = Field(alias="log-level")
 
 
-################################################
-# TKF Standard Diagnostic API Endpoints
-################################################
-@app.get("/api/internal/diagnostics/health")
+@diagnostics_router.get("/health")
 async def health():
     """TKF standard health endpoint for liveness probe.
 
@@ -52,23 +42,22 @@ async def health():
     service_state = check_self()
     timestamp = datetime.datetime.now().isoformat()
 
-    # Construct response with both simple status and detailed info
-    status = "UP" if service_state in [HealthState.UP, HealthState.DEGRADED] else "DOWN"
     response_body = {
-        "status": status,
+        "status": service_state.name,
         "service_name": service_name,
         "service_state": service_state.name,
         "last_updated": timestamp,
     }
 
-    # Return appropriate status code for k8s liveness probe
-    if service_state in [HealthState.UP, HealthState.DEGRADED]:
+    if service_state == HealthState.UP:
         return JSONResponse(content=response_body, status_code=200)
+    elif service_state == HealthState.DEGRADED:
+        return JSONResponse(content=response_body, status_code=503)
     else:
         return JSONResponse(content=response_body, status_code=500)
 
 
-@app.get("/api/internal/diagnostics/info")
+@diagnostics_router.get("/info")
 async def info():
     """TKF standard info endpoint with git commit information.
 
@@ -86,20 +75,7 @@ async def info():
     }
 
 
-@app.get("/api/internal/diagnostics/metrics", include_in_schema=False)
-async def metrics_endpoint():
-    """Application metrics endpoint.
-
-    Returns:
-        Application metrics in JSON format
-    """
-    return {
-        "uptime": os.environ.get("MOCK_APP_UPTIME", "unknown"),
-        "requests_handled": os.environ.get("MOCK_REQUESTS_HANDLED", "unknown"),
-    }
-
-
-@app.get("/api/internal/diagnostics/loggers")
+@diagnostics_router.get("/loggers")
 async def get_loggers():
     """Get current log level configuration.
 
@@ -109,8 +85,8 @@ async def get_loggers():
     return get_loggers_info()
 
 
-@app.post(
-    "/api/internal/diagnostics/loggers",
+@diagnostics_router.put(
+    "/loggers",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def update_loggers(log_config: LogLevelUpdate):
@@ -130,19 +106,40 @@ async def update_loggers(log_config: LogLevelUpdate):
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@app.get("/healthz")
-def healthz():
-    service_state = check_self()
+@diagnostics_router.get("/metrics")
+async def metrics_list():
+    """List available application metrics.
 
-    timestamp = datetime.now().isoformat()
-    response_body = {
-        "service_name": service_name,
-        "service_state": service_state.name,
-        "last_updated": timestamp,
-    }
+    Returns:
+        JSON object with metric names from the Prometheus registry
+    """
+    metric_names = sorted({metric.name for metric in REGISTRY.collect() for _ in metric.samples})
+    return {"metrics": metric_names}
 
-    # Return appropriate status code for k8s liveness probe
-    if service_state == HealthState.UP or service_state == HealthState.DEGRADED:
-        return JSONResponse(content=response_body, status_code=200)
-    else:
-        return JSONResponse(content=response_body, status_code=500)
+
+@diagnostics_router.get("/metrics/{metric_name}")
+async def get_metric(metric_name: str):
+    """Get the value for a specific metric.
+
+    Args:
+        metric_name: Name of the metric to retrieve
+
+    Returns:
+        JSON object with metric samples, or 404 if not found
+    """
+    for metric_family in REGISTRY.collect():
+        if metric_family.name == metric_name:
+            samples = [
+                {
+                    "name": sample.name,
+                    "labels": dict(sample.labels),
+                    "value": sample.value,
+                }
+                for sample in metric_family.samples
+            ]
+            return {"metric_name": metric_name, "samples": samples}
+
+    return JSONResponse(
+        content={"error": f"Metric '{metric_name}' not found"},
+        status_code=404,
+    )

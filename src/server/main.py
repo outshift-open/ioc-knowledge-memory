@@ -12,6 +12,7 @@ from server.api.api import api_router
 from server.common import service_name
 from knowledge_memory.bootstrap.lifespan import create_lifespan
 from knowledge_memory.bootstrap.app_factory import create_app
+from server.diagnostics import diagnostics_router
 
 # Load environment variables from .env file in current or parent directories
 load_dotenv(override=True)
@@ -35,6 +36,7 @@ lifespan = create_lifespan(
 
 app = create_app(lifespan=lifespan)
 app.include_router(api_router, prefix="/api")
+app.include_router(diagnostics_router, prefix="/api/internal/diagnostics", tags=["diagnostics"])
 
 if __name__ == "__main__":
     import uvicorn

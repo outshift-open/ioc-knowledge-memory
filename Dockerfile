@@ -54,5 +54,8 @@ USER app
 ENV PYTHONPATH="/home/app/src"
 ENV PATH="/home/app/bin:/home/app/.local/bin:$PATH"
 
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:9003/api/internal/diagnostics/health || exit 1
+
 # Use entrypoint script to run initializations if required, then start server
 ENTRYPOINT ["/home/app/docker-entrypoint.sh"]
