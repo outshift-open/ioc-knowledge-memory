@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from fastapi import APIRouter, status, Request
+from fastapi import APIRouter, status, Request, Query
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -13,6 +13,8 @@ from server.schemas.knowledge_graph import (
     KnowledgeGraphQueryResponse,
     KnowledgeGraphDeleteRequest,
     KnowledgeGraphDeleteResponse,
+    KnowledgeGraphSimilaritySearchRequest,
+    KnowledgeGraphSimilaritySearchResponse,
     ResponseStatus,
 )
 from server.services.knowledge_graph import knowledge_graph_service
@@ -105,6 +107,38 @@ def query_graph_store(data: KnowledgeGraphQueryRequest):
     else:
         status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
 
+    return JSONResponse(content=response.model_dump(), status_code=status_code)
+
+
+@router.post(
+    "/query/similarity",
+    response_model=KnowledgeGraphSimilaritySearchResponse,
+    responses={
+        200: {"description": "Similarity search executed successfully"},
+        400: {"description": "Bad request - validation error"},
+        500: {"description": "Internal server error"},
+    },
+)
+def similarity_search(
+    data: KnowledgeGraphSimilaritySearchRequest,
+    include_embeddings: bool = Query(
+        default=False, description="Include embedding vectors in response properties (debug only)"
+    ),
+):
+    """
+    Find graph nodes nearest to a query embedding vector using HNSW index.
+    """
+    response = knowledge_graph_service.similarity_search(data)
+    if not include_embeddings and response.results:
+        # Do not include embedding vectors unless explicitly requested
+        for result in response.results:
+            result.embedding_vector = None
+    if response.status == ResponseStatus.SUCCESS:
+        status_code = status.HTTP_200_OK
+    elif response.status == ResponseStatus.VALIDATION_ERROR:
+        status_code = status.HTTP_400_BAD_REQUEST
+    else:
+        status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     return JSONResponse(content=response.model_dump(), status_code=status_code)
 
 

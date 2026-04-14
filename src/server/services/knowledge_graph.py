@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 import logging
 
 from server.adapters.adapter_graphdb_agensgraph import AdapterGraphdbAgensgraph
@@ -13,6 +14,9 @@ from server.schemas.knowledge_graph import (
     KnowledgeGraphDeleteResponse,
     KnowledgeGraphQueryRequest,
     KnowledgeGraphQueryResponse,
+    KnowledgeGraphSimilaritySearchRequest,
+    KnowledgeGraphSimilaritySearchResponse,
+    KnowledgeGraphSimilaritySearchResult,
     QUERY_TYPE_PATH,
     QUERY_TYPE_NEIGHBOUR,
     QUERY_TYPE_CONCEPT,
@@ -175,6 +179,47 @@ class KnowledgeGraphService:
                 message=error_msg,
             )
             return response
+
+    def similarity_search(self, data: KnowledgeGraphSimilaritySearchRequest) -> KnowledgeGraphSimilaritySearchResponse:
+        """Find nodes nearest to the query embedding vector."""
+        request_id = data.request_id
+        try:
+            adapter = AdapterGraphdbAgensgraph()
+            graph = adapter.get_graph_name(data.model_dump())
+
+            db = GraphDB()
+            rows = db.similarity_search(
+                graph=graph,
+                query_vector=data.embedding,
+                limit=data.limit,
+                metric=data.metric,
+            )
+
+            results = [
+                KnowledgeGraphSimilaritySearchResult(
+                    score=row["distance"],
+                    # TODO: need to have the CE to send the embedded_text during graph creation/update so we can retrieve it properly
+                    embedded_text=row["properties"].get("name", ""),
+                    concept_id=row["properties"].get("id", row["node_id"]),
+                    concept_name=row["properties"].get("name", ""),
+                    embedding_vector=json.loads(raw_vec) if (raw_vec := row["properties"].get("embedding_vector")) else None,
+                )
+                for row in rows
+            ]
+            return KnowledgeGraphSimilaritySearchResponse(
+                request_id=request_id,
+                status=ResponseStatus.SUCCESS,
+                message=f"Found {len(results)} results in graph '{graph}'",
+                results=results if results else None,
+            )
+        except Exception as e:
+            error_msg = f"Similarity search failed: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return KnowledgeGraphSimilaritySearchResponse(
+                request_id=request_id,
+                status=ResponseStatus.FAILURE,
+                message=error_msg,
+            )
 
     def delete_graph_store_internal(self, data: KnowledgeGraphDeleteRequest) -> KnowledgeGraphDeleteResponse:
         """Delete a graph"""

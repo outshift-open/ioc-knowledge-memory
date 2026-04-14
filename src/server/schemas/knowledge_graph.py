@@ -276,6 +276,55 @@ class KnowledgeGraphDeleteResponse(BaseModel):
         return data
 
 
+# Similarity search models
+
+
+class KnowledgeGraphSimilaritySearchRequest(BaseModel):
+    """Request for vector similarity search over graph nodes."""
+
+    request_id: str = Field(
+        default_factory=lambda: str(uuid4()), description="Auto-generated UUID for request tracking"
+    )
+    mas_id: Optional[str] = Field(default=None, min_length=1, description="ID for the Multi-Agent System")
+    wksp_id: Optional[str] = Field(default=None, min_length=1, description="The workspace ID for the request")
+    embedding: List[float] = Field(..., description="Query embedding vector")
+    limit: int = Field(default=10, ge=1, le=100, description="Maximum number of results to return")
+    metric: Literal["cosine", "l2", "inner-product"] = Field(default="l2", description="Distance metric")
+
+    @model_validator(mode="after")
+    def validate_mas_or_wksp_id(self) -> "KnowledgeGraphSimilaritySearchRequest":
+        if not self.mas_id and not self.wksp_id:
+            raise ValueError("Either 'mas_id' or 'wksp_id' or both must be provided")
+        return self
+
+
+class KnowledgeGraphSimilaritySearchResult(BaseModel):
+    """A single similarity search result."""
+
+    score: float = Field(..., description="Distance from query vector")
+    embedded_text: str = Field(..., description="Text that was embedded (concept name)")
+    concept_id: str = Field(..., description="Concept node ID")
+    concept_name: str = Field(..., description="Concept name")
+    embedding_vector: Optional[List[float]] = Field(default=None, description="Embedding vector (only populated when include_embeddings=true)")
+
+
+class KnowledgeGraphSimilaritySearchResponse(BaseModel):
+    """Response for embedding vector similarity search."""
+
+    model_config = ConfigDict(exclude_none=True)
+
+    request_id: Optional[str] = Field(None, description="UUID for request tracking")
+    status: ResponseStatus = Field(..., description="Status of the request")
+    message: Optional[str] = Field(None, description="Optional message")
+    results: Optional[List[KnowledgeGraphSimilaritySearchResult]] = Field(
+        default=None, description="Similarity search results"
+    )
+
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        kwargs.setdefault("exclude_none", True)
+        return super().model_dump(**kwargs)
+
+
 # Query models
 
 QUERY_TYPE_NEIGHBOUR = "neighbour"

@@ -19,6 +19,7 @@ from server.schemas.knowledge_graph import (
     KnowledgeGraphStoreResponse,
     KnowledgeGraphDeleteResponse,
     KnowledgeGraphQueryResponse,
+    KnowledgeGraphSimilaritySearchResponse,
 )
 
 # Create a test FastAPI app
@@ -76,6 +77,14 @@ TEST_QUERY_REQUEST = {
     "wksp_id": "test-wksp",
     "query_criteria": {"query_type": "neighbour"},
     "records": {"concepts": [{"id": "c1"}]},
+}
+
+TEST_SIMILARITY_SEARCH_REQUEST = {
+    "request_id": "test-request-id",
+    "mas_id": "test-mas",
+    "embedding": [0.1, 0.2, 0.3, -0.1, 0.5],
+    "limit": 5,
+    "metric": "cosine",
 }
 
 
@@ -329,3 +338,164 @@ class TestKnowledgeGraphEndpoints:
         response_data = response.json()
         assert response_data["status"] == "validation error"
         assert "Path queries require exactly 2 concepts" in response_data["message"]
+
+    @patch("server.api.endpoints.knowledge_graph.knowledge_graph_service.similarity_search")
+    def test_similarity_search_success(self, mock_search):
+        """Test successful similarity search."""
+        # Setup mock
+        mock_response = KnowledgeGraphSimilaritySearchResponse(
+            request_id="test-request-id",
+            status="success",
+            message="Found 2 results in graph 'test-mas'",
+            results=[],
+        )
+        mock_search.return_value = mock_response
+
+        # Make request
+        response = test_client.post("/knowledge/graph/query/similarity", json=TEST_SIMILARITY_SEARCH_REQUEST)
+
+        # Assertions
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["request_id"] == "test-request-id"
+        assert response.json()["status"] == "success"
+
+    @patch("server.api.endpoints.knowledge_graph.knowledge_graph_service.similarity_search")
+    def test_similarity_search_failure(self, mock_search):
+        """Test failure case for similarity search."""
+        # Setup mock
+        mock_response = KnowledgeGraphSimilaritySearchResponse(
+            request_id="test-request-id",
+            status="failure",
+            message="Similarity search failed: connection error",
+        )
+        mock_search.return_value = mock_response
+
+        # Make request
+        response = test_client.post("/knowledge/graph/query/similarity", json=TEST_SIMILARITY_SEARCH_REQUEST)
+
+        # Assertions
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json()["request_id"] == "test-request-id"
+        assert response.json()["status"] == "failure"
+
+    def test_similarity_search_missing_mas_and_wksp_id(self):
+        """Test validation error when both mas_id and wksp_id are missing."""
+        invalid_request = {
+            "embedding": [0.1, 0.2, 0.3],
+            "limit": 5,
+            "metric": "cosine",
+        }
+
+        response = test_client.post("/knowledge/graph/query/similarity", json=invalid_request)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        response_data = response.json()
+        assert response_data["status"] == "validation error"
+        assert "Either 'mas_id' or 'wksp_id' or both must be provided" in response_data["message"]
+
+    def test_similarity_search_missing_embedding(self):
+        """Test validation error when embedding field is missing."""
+        invalid_request = {
+            "mas_id": "test-mas",
+            "limit": 5,
+            "metric": "cosine",
+        }
+
+        response = test_client.post("/knowledge/graph/query/similarity", json=invalid_request)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_similarity_search_invalid_metric(self):
+        """Test validation error for invalid metric value."""
+        invalid_request = {
+            "mas_id": "test-mas",
+            "embedding": [0.1, 0.2, 0.3],
+            "metric": "euclidean",  # not a valid metric
+        }
+
+        response = test_client.post("/knowledge/graph/query/similarity", json=invalid_request)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    @patch("server.api.endpoints.knowledge_graph.knowledge_graph_service.similarity_search")
+    def test_similarity_search_with_wksp_id(self, mock_search):
+        """Test similarity search using wksp_id instead of mas_id."""
+        mock_response = KnowledgeGraphSimilaritySearchResponse(
+            request_id="test-request-id",
+            status="success",
+            message="Found 0 results in graph 'test-wksp'",
+        )
+        mock_search.return_value = mock_response
+
+        request = {
+            "wksp_id": "test-wksp",
+            "embedding": [0.1, 0.2, 0.3],
+            "limit": 10,
+            "metric": "l2",
+        }
+
+        response = test_client.post("/knowledge/graph/query/similarity", json=request)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["status"] == "success"
+
+    @patch("server.api.endpoints.knowledge_graph.knowledge_graph_service.similarity_search")
+    def test_similarity_search_excludes_embedding_by_default(self, mock_search):
+        """Test that embedding_vector is empty string by default."""
+        from server.schemas.knowledge_graph import KnowledgeGraphSimilaritySearchResult
+
+        mock_response = KnowledgeGraphSimilaritySearchResponse(
+            request_id="test-request-id",
+            status="success",
+            message="Found 1 results in graph 'test-mas'",
+            results=[
+                KnowledgeGraphSimilaritySearchResult(
+                    score=0.05,
+                    embedded_text="Test Concept",
+                    concept_id="c1",
+                    concept_name="Test Concept",
+                    embedding_vector=[0.1, 0.2, 0.3],
+                )
+            ],
+        )
+        mock_search.return_value = mock_response
+
+        response = test_client.post("/knowledge/graph/query/similarity", json=TEST_SIMILARITY_SEARCH_REQUEST)
+
+        assert response.status_code == status.HTTP_200_OK
+        result = response.json()["results"][0]
+        assert result.get("embedding_vector") is None
+        assert result["concept_name"] == "Test Concept"
+        assert result["concept_id"] == "c1"
+        assert result["score"] == 0.05
+
+    @patch("server.api.endpoints.knowledge_graph.knowledge_graph_service.similarity_search")
+    def test_similarity_search_includes_embedding_when_flag_set(self, mock_search):
+        """Test that embedding_vector is populated when include_embeddings=true."""
+        from server.schemas.knowledge_graph import KnowledgeGraphSimilaritySearchResult
+
+        mock_response = KnowledgeGraphSimilaritySearchResponse(
+            request_id="test-request-id",
+            status="success",
+            message="Found 1 results in graph 'test-mas'",
+            results=[
+                KnowledgeGraphSimilaritySearchResult(
+                    score=0.05,
+                    embedded_text="Test Concept",
+                    concept_id="c1",
+                    concept_name="Test Concept",
+                    embedding_vector=[0.1, 0.2, 0.3],
+                )
+            ],
+        )
+        mock_search.return_value = mock_response
+
+        response = test_client.post(
+            "/knowledge/graph/query/similarity?include_embeddings=true", json=TEST_SIMILARITY_SEARCH_REQUEST
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        result = response.json()["results"][0]
+        assert result["embedding_vector"] == [0.1, 0.2, 0.3]
+        assert result["concept_name"] == "Test Concept"
+        assert result["concept_id"] == "c1"

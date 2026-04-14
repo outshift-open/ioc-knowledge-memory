@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 import agensgraph
 
 from server.database.connection import ConnectDB
+from server.schemas.knowledge_vector import EMBEDDING_VECTOR_SIZE
 
 
 class GraphDB:
@@ -103,6 +104,34 @@ class GraphDB:
         except SQLAlchemyError as e:
             # Transaction automatically rolled back on exception
             raise RuntimeError(f"Failed to create graph '{graph_name}': {str(e)}")
+
+    def ensure_embedding_index(self, graph_name: str, label: str = "concept") -> None:
+        """Create an HNSW expression index on the embedding_vector JSONB field if it does not exist.
+
+        The index is built on the expression ((properties->>'embedding_vector')::vector(N))
+        so no extra column is needed — embedding_vector stays in the JSONB properties bag
+        written by Cypher CREATE.
+
+        Args:
+            graph_name: Graph name (used as the PostgreSQL schema name)
+            label: Vertex label table name (default: "concept")
+        """
+        index_name = f"{graph_name}_{label}_embedding_l2_idx"
+        try:
+            with self.connect_db.engine.begin() as conn:
+                conn.execute(
+                    text(
+                        f'CREATE INDEX IF NOT EXISTS "{index_name}"'
+                        f' ON "{graph_name}"."{label}"'
+                        f" USING hnsw (((properties->>'embedding_vector')::vector({EMBEDDING_VECTOR_SIZE}))"
+                        f" vector_l2_ops)"
+                    )
+                )
+                self.logger.info(f"Ensured HNSW expression index '{index_name}' on '{graph_name}'.'{label}'")
+        except SQLAlchemyError as e:
+            # Log without raising exception - index creation is best-effort and SHALL NOT block graph saves
+            # for nodes that don't carry embeddings.
+            self.logger.warning(f"Could not create embedding index '{index_name}' on '{graph_name}'.'{label}': {str(e)}")
 
     def delete_graph(self, graph_name: str, soft_delete: bool = False) -> bool:
         """Delete a graph from the database.
@@ -370,6 +399,11 @@ class GraphDB:
                         query, params = edge.to_cypher_create()
                         conn.exec_driver_sql(query, params)
 
+                # Ensure the HNSW expression index exists for similarity search.
+                # embedding_vector stays in JSONB — no separate write needed.
+                if nodes:
+                    self.ensure_embedding_index(graph)
+
                 self.logger.info(f"Successfully saved {len(nodes or [])} nodes and {len(edges or [])} edges")
                 return (
                     True,
@@ -386,6 +420,66 @@ class GraphDB:
         except Exception as e:
             self.logger.error(f"Error in save operation: {str(e)}", exc_info=True)
             return False, f"Save operation failed: {str(e)}"
+
+    def similarity_search(
+        self,
+        graph: str,
+        query_vector: list,
+        limit: int = 10,
+        metric: str = "l2",
+        label: str = "concept",
+    ) -> list[dict]:
+        """Find the nearest-neighbour nodes to a query vector using the HNSW expression index.
+
+        embedding_vector is stored as a JSON string in JSONB properties and cast to vector
+        at query time. The expression index on ((properties->>'embedding_vector')::vector(N))
+        makes this efficient.
+
+        Uses a hybrid SQL/Cypher subquery: Cypher MATCH retrieves node properties, the outer
+        SQL ORDER BY applies the vector distance operator.
+
+        Args:
+            graph: Graph name
+            query_vector: List of floats representing the query embedding
+            limit: Maximum number of results to return (default: 10)
+            metric: Distance metric — "cosine" (default), "l2", or "inner-product"
+            label: Vertex label name (default: "concept")
+
+        Returns:
+            List of dicts with keys: node_id, properties, distance
+        """
+        if metric == "l2":
+            operator = "<->"
+        elif metric == "inner-product":
+            operator = "<#>"
+        else:
+            operator = "<=>"
+        vec_str = "[" + ",".join(str(v) for v in query_vector) + "]"
+
+        try:
+            with self.connect_db.engine.connect() as conn:
+                conn.exec_driver_sql(f'SET graph_path = "{graph}"')
+                result = conn.execute(
+                    text(
+                        f"SELECT m->>'id' AS node_id, m AS properties,"
+                        f"  (m->>'embedding_vector')::vector({EMBEDDING_VECTOR_SIZE}) {operator} CAST(:vec AS vector({EMBEDDING_VECTOR_SIZE})) AS distance"
+                        f" FROM ("
+                        f"   MATCH (n:{label}) RETURN properties(n) AS m"
+                        f" ) t"
+                        f" WHERE m->>'embedding_vector' IS NOT NULL"
+                        f" ORDER BY distance"
+                        f" LIMIT :limit"
+                    ),
+                    {"vec": vec_str, "limit": limit},
+                )
+                rows = result.fetchall()
+
+            return [
+                {"node_id": row[0], "properties": dict(row[1]) if row[1] else {}, "distance": row[2]} for row in rows
+            ]
+
+        except SQLAlchemyError as e:
+            raise RuntimeError(f"Similarity search failed on '{graph}'.'{label}': {str(e)}")
 
     def delete(self, graph: str, nodes: list) -> tuple[bool, str]:
         """
