@@ -33,9 +33,9 @@ class TestHealthEndpoint:
         assert "last_updated" in body
 
     @patch("server.diagnostics.check_self", return_value=HealthState.DEGRADED)
-    def test_health_degraded_returns_503(self, mock_check):
+    def test_health_degraded_returns_200(self, mock_check):
         response = client.get(f"{PREFIX}/health")
-        assert response.status_code == 503
+        assert response.status_code == 200
         body = response.json()
         assert body["status"] == "DEGRADED"
         assert body["service_state"] == "DEGRADED"
@@ -56,6 +56,33 @@ class TestHealthEndpoint:
         assert body["status"] == "UNKNOWN"
         assert body["service_state"] == "UNKNOWN"
 
+    @patch("server.diagnostics.check_self", return_value=HealthState.UP)
+    def test_health_no_checks_without_dependencies_param(self, mock_check):
+        response = client.get(f"{PREFIX}/health")
+        body = response.json()
+        assert "checks" not in body
+
+    @patch("server.diagnostics._tcp_probe", return_value=True)
+    @patch("server.diagnostics._probe_url", return_value=True)
+    @patch("server.diagnostics.check_self", return_value=HealthState.UP)
+    def test_health_dependencies_all_healthy(self, mock_check, mock_probe_url, mock_tcp):
+        response = client.get(f"{PREFIX}/health?dependencies=true")
+        assert response.status_code == 200
+        body = response.json()
+        assert "checks" in body
+        assert body["checks"]["database"] is True
+        assert body["checks"]["management_plane"] is True
+
+    @patch("server.diagnostics._tcp_probe", return_value=False)
+    @patch("server.diagnostics._probe_url", return_value=False)
+    @patch("server.diagnostics.check_self", return_value=HealthState.UP)
+    def test_health_dependencies_all_unhealthy(self, mock_check, mock_probe_url, mock_tcp):
+        response = client.get(f"{PREFIX}/health?dependencies=true")
+        body = response.json()
+        assert "checks" in body
+        assert body["checks"]["database"] is False
+        assert body["checks"]["management_plane"] is False
+
 
 class TestInfoEndpoint:
     """Tests for GET /info."""
@@ -66,6 +93,7 @@ class TestInfoEndpoint:
             "GIT_COMMIT_TIME": "2026-01-01T00:00:00",
             "GIT_COMMIT_SHA": "abc123",
             "GIT_BRANCH": "feature/test",
+            "ENV": "production",
         },
     )
     def test_info_with_env_vars(self):
@@ -75,6 +103,11 @@ class TestInfoEndpoint:
         assert body["git"]["commit"]["time"] == "2026-01-01T00:00:00"
         assert body["git"]["commit"]["id"] == "abc123"
         assert body["git"]["branch"] == "feature/test"
+        assert "service" in body
+        assert "version" in body
+        assert "python_version" in body
+        assert "platform" in body
+        assert body["environment"] == "production"
 
     @patch.dict("os.environ", {}, clear=True)
     def test_info_defaults_when_env_missing(self):
@@ -84,6 +117,11 @@ class TestInfoEndpoint:
         assert body["git"]["commit"]["time"] == "unknown"
         assert body["git"]["commit"]["id"] == "unknown"
         assert body["git"]["branch"] == "main"
+        assert body["environment"] == "development"
+        assert "service" in body
+        assert "version" in body
+        assert "python_version" in body
+        assert "platform" in body
 
 
 class TestLoggersEndpoint:
@@ -132,10 +170,14 @@ class TestMetricsEndpoints:
         mock_registry.collect.return_value = [
             SimpleNamespace(
                 name="http_requests",
+                type="counter",
+                documentation="Total HTTP requests",
                 samples=[SimpleNamespace(name="http_requests_total", labels={}, value=10.0)],
             ),
             SimpleNamespace(
                 name="process_cpu",
+                type="gauge",
+                documentation="CPU seconds total",
                 samples=[SimpleNamespace(name="process_cpu_seconds_total", labels={}, value=1.5)],
             ),
         ]
@@ -143,7 +185,10 @@ class TestMetricsEndpoints:
         assert response.status_code == 200
         body = response.json()
         assert "metrics" in body
-        assert body["metrics"] == ["http_requests", "process_cpu"]
+        assert body["metrics"] == [
+            {"name": "http_requests", "type": "counter", "help": "Total HTTP requests"},
+            {"name": "process_cpu", "type": "gauge", "help": "CPU seconds total"},
+        ]
 
     @patch("server.diagnostics.REGISTRY")
     def test_get_metric_success(self, mock_registry):

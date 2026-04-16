@@ -2,10 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Diagnostic API endpoints for TKF standard diagnostics."""
+"""Diagnostic API endpoints for standard diagnostics."""
 
 import datetime
 import os
+import platform
+import socket
+import sys
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Response, status
 from fastapi.responses import JSONResponse
@@ -29,12 +33,38 @@ class LogLevelUpdate(BaseModel):
     log_level: str = Field(alias="log-level")
 
 
+def _tcp_probe(host: str, port: int, timeout: float = 3.0) -> bool:
+    """Return True if a TCP connection to host:port succeeds within timeout."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
+
+
+def _probe_url(url: str, timeout: float = 3.0) -> bool:
+    """Parse url and TCP-probe its host+port."""
+    try:
+        if "://" not in url:
+            url = "http://" + url
+        parsed = urlparse(url)
+        host = parsed.hostname or "localhost"
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        return _tcp_probe(host, port, timeout)
+    except Exception:
+        return False
+
+
 @diagnostics_router.get("/health")
-async def health():
-    """TKF standard health endpoint for liveness probe.
+async def health(dependencies: bool = False):
+    """Standard health endpoint for liveness probe.
 
     Returns a simple status for k8s liveness probe and also includes
     detailed service state information.
+
+    When ?dependencies=true is passed, probes downstream services via TCP:
+    - database (critical): PostgreSQL at IOC_KNOWLEDGE_DB_HOST:IOC_KNOWLEDGE_DB_PORT
+    - management_plane (optional): ioc-mgmt-plane at MEMORY_PROVIDER_REGISTRATION_URL
 
     Returns:
         JSONResponse with health status and 200/500 status code
@@ -49,29 +79,48 @@ async def health():
         "last_updated": timestamp,
     }
 
-    if service_state == HealthState.UP:
+    if dependencies:
+        db_host = os.environ.get("IOC_KNOWLEDGE_DB_HOST", "localhost")
+        db_port = int(os.environ.get("IOC_KNOWLEDGE_DB_PORT", "5456"))
+        mgmt_url = os.environ.get("MEMORY_PROVIDER_REGISTRATION_URL", "http://localhost:8000")
+
+        response_body["checks"] = {
+            "database": _tcp_probe(db_host, db_port),
+            "management_plane": _probe_url(mgmt_url),
+        }
+
+    if service_state in (HealthState.UP, HealthState.DEGRADED):
         return JSONResponse(content=response_body, status_code=200)
-    elif service_state == HealthState.DEGRADED:
-        return JSONResponse(content=response_body, status_code=503)
     else:
         return JSONResponse(content=response_body, status_code=500)
 
 
 @diagnostics_router.get("/info")
 async def info():
-    """TKF standard info endpoint with git commit information.
+    """Standard info endpoint with service metadata and git commit information.
 
     Returns:
-        Dictionary with git commit information
+        Dictionary with service info and git commit information
     """
+    try:
+        from importlib.metadata import version as pkg_version
+        ver = pkg_version("ioc-knowledge-memory-svc")
+    except Exception:
+        ver = os.environ.get("APPLICATION_VERSION", "unknown")
+
     return {
+        "service": service_name,
+        "version": ver,
+        "python_version": sys.version,
+        "platform": platform.platform(),
+        "environment": os.environ.get("ENV", "development"),
         "git": {
             "commit": {
                 "time": os.environ.get("GIT_COMMIT_TIME", "unknown"),
                 "id": os.environ.get("GIT_COMMIT_SHA", "unknown"),
             },
             "branch": os.environ.get("GIT_BRANCH", "main"),
-        }
+        },
     }
 
 
@@ -111,10 +160,16 @@ async def metrics_list():
     """List available application metrics.
 
     Returns:
-        JSON object with metric names from the Prometheus registry
+        JSON object with metric descriptors (name, type, help) from the Prometheus registry
     """
-    metric_names = sorted({metric.name for metric in REGISTRY.collect() for _ in metric.samples})
-    return {"metrics": metric_names}
+    metrics = []
+    for metric in REGISTRY.collect():
+        metrics.append({
+            "name": metric.name,
+            "type": metric.type,
+            "help": metric.documentation,
+        })
+    return {"metrics": metrics}
 
 
 @diagnostics_router.get("/metrics/{metric_name}")

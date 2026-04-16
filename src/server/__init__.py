@@ -2,4 +2,4 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# TKF Data Logic Service Server Package
+# IOC Knowledge Memory Service Server Package

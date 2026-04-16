@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Application logging module for TKF services.
+Application logging module for IOC services.
 
 Provides centralized logging configuration and utilities for managing
 log levels dynamically at runtime.
