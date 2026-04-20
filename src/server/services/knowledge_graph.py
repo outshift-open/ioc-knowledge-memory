@@ -12,6 +12,7 @@ from server.schemas.knowledge_graph import (
     KnowledgeGraphStoreResponse,
     KnowledgeGraphDeleteRequest,
     KnowledgeGraphDeleteResponse,
+    KnowledgeGraphFetchResponse,
     KnowledgeGraphQueryRequest,
     KnowledgeGraphQueryResponse,
     KnowledgeGraphSimilaritySearchRequest,
@@ -20,6 +21,7 @@ from server.schemas.knowledge_graph import (
     QUERY_TYPE_PATH,
     QUERY_TYPE_NEIGHBOUR,
     QUERY_TYPE_CONCEPT,
+    QUERY_TYPE_FULL_GRAPH,
     ResponseStatus,
 )
 
@@ -105,7 +107,6 @@ class KnowledgeGraphService:
         try:
             adapter = AdapterGraphdbAgensgraph()
             graph = adapter.get_graph_name(data.model_dump())
-            nodes = adapter.convert_query_to_models(data.model_dump())
 
             db = GraphDB()
             # Validate if graph exists
@@ -117,6 +118,28 @@ class KnowledgeGraphService:
                     message=f"Graph {graph} does not exist",
                 )
                 return response
+
+            # Check query type and call appropriate method
+            query_type = data.query_criteria.query_type
+
+            if query_type == QUERY_TYPE_FULL_GRAPH:
+                self.logger.info(f"Fetching full graph: {graph}")
+                success, full_graph_data, msg = db.get_all_nodes_and_edges(graph)
+                if not success:
+                    return KnowledgeGraphQueryResponse(
+                        request_id=request_id,
+                        status=ResponseStatus.FAILURE,
+                        message=msg,
+                    )
+                records = adapter.convert_models_to_query_response_records([full_graph_data])
+                return KnowledgeGraphQueryResponse(
+                    request_id=request_id,
+                    status=ResponseStatus.SUCCESS,
+                    message=msg,
+                    records=records if records else None,
+                )
+
+            nodes = adapter.convert_query_to_models(data.model_dump())
 
             # Validate if nodes exist
             not_found_nodes = []
@@ -132,9 +155,6 @@ class KnowledgeGraphService:
                     message=f"Nodes do not exist: {', '.join(not_found_nodes)}",
                 )
                 return response
-
-            # Check query type and call appropriate method
-            query_type = data.query_criteria.query_type
 
             if query_type == QUERY_TYPE_PATH:
                 self.logger.info(f"Querying path: {nodes}")
@@ -217,6 +237,50 @@ class KnowledgeGraphService:
             self.logger.error(error_msg, exc_info=True)
             return KnowledgeGraphSimilaritySearchResponse(
                 request_id=request_id,
+                status=ResponseStatus.FAILURE,
+                message=error_msg,
+            )
+
+    def fetch_graph(self, mas_id: str = None, wksp_id: str = None) -> KnowledgeGraphFetchResponse:
+        """Fetch all nodes and edges from a knowledge graph."""
+        try:
+            adapter = AdapterGraphdbAgensgraph()
+            graph = adapter.get_graph_name({"mas_id": mas_id, "wksp_id": wksp_id})
+
+            db = GraphDB()
+
+            graph_result = db.get_graph(graph)
+            if not graph_result:
+                return KnowledgeGraphFetchResponse(
+                    status=ResponseStatus.NOT_FOUND,
+                    message=f"Graph for mas_id='{mas_id}' does not exist",
+                    graph_name=graph,
+                )
+
+            success, data, msg = db.get_all_nodes_and_edges(graph)
+            if not success:
+                return KnowledgeGraphFetchResponse(
+                    status=ResponseStatus.FAILURE,
+                    message=msg,
+                    graph_name=graph,
+                )
+
+            records = adapter.convert_models_to_query_response_records([data])
+            nodes = records[0].concepts if records else []
+            relations = records[0].relationships if records else []
+
+            return KnowledgeGraphFetchResponse(
+                status=ResponseStatus.SUCCESS,
+                message=msg,
+                graph_name=graph,
+                nodes=nodes if nodes else None,
+                relations=relations if relations else None,
+            )
+
+        except Exception as e:
+            error_msg = f"Failed to fetch graph: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return KnowledgeGraphFetchResponse(
                 status=ResponseStatus.FAILURE,
                 message=error_msg,
             )

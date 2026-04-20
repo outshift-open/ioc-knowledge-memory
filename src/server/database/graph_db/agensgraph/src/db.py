@@ -525,6 +525,37 @@ class GraphDB:
             self.logger.error(f"Error in delete operation: {str(e)}", exc_info=True)
             return False, f"Delete operation failed: {str(e)}"
 
+    def get_all_nodes_and_edges(self, graph_name: str) -> tuple[bool, dict, str]:
+        """Fetch all nodes and edges from the given graph.
+
+        Args:
+            graph_name: Name of the graph to fetch from
+
+        Returns:
+            Tuple containing (success: bool, data: dict with 'nodes' and 'edges' lists, msg: str)
+        """
+        try:
+            with self.connect_db.engine.connect() as conn:
+                conn.exec_driver_sql(f'SET graph_path = "{graph_name}"')
+
+                node_result = conn.exec_driver_sql(
+                    "MATCH (n) RETURN collect(n) as nodes"
+                ).fetchone()
+                nodes_raw = [dict(n) for n in node_result[0]] if node_result and node_result[0] else []
+
+                edge_result = conn.exec_driver_sql(
+                    "MATCH ()-[r]->() RETURN collect(r) as edges"
+                ).fetchone()
+                edges_raw = [dict(r) for r in edge_result[0]] if edge_result and edge_result[0] else []
+
+            msg = f"Found {len(nodes_raw)} nodes and {len(edges_raw)} edges in graph '{graph_name}'"
+            return True, {"nodes": nodes_raw, "edges": edges_raw}, msg
+
+        except Exception as e:
+            error_msg = f"Failed to fetch graph '{graph_name}': {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return False, {}, error_msg
+
     def query_type_concept(self, graph: str, nodes: list) -> tuple[bool, list, str]:
         """
         Query the graph database for the given node.

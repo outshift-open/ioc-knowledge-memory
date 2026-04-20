@@ -204,6 +204,22 @@ class KnowledgeGraphStoreResponse(BaseModel):
         return data
 
 
+class KnowledgeGraphFetchResponse(BaseModel):
+    """Response containing all nodes and edges in a knowledge graph."""
+
+    model_config = ConfigDict(exclude_none=True)
+
+    status: ResponseStatus = Field(..., description="Status of the request")
+    message: Optional[str] = Field(None, description="Optional message")
+    graph_name: Optional[str] = Field(None, description="Name of the graph")
+    nodes: Optional[List[Concept]] = Field(default=None, description="All nodes in the graph")
+    relations: Optional[List[Relation]] = Field(default=None, description="All edges in the graph")
+
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        kwargs.setdefault("exclude_none", True)
+        return super().model_dump(**kwargs)
+
+
 class KnowledgeGraphDeleteRequest(BaseModel):
     """
     Represents a request to delete a store.
@@ -330,6 +346,7 @@ class KnowledgeGraphSimilaritySearchResponse(BaseModel):
 QUERY_TYPE_NEIGHBOUR = "neighbour"
 QUERY_TYPE_PATH = "path"
 QUERY_TYPE_CONCEPT = "concept"
+QUERY_TYPE_FULL_GRAPH = "full_graph"
 
 
 class KnowledgeGraphQueryCriteria(BaseModel):
@@ -359,7 +376,7 @@ class KnowledgeGraphQueryRequest(BaseModel):
         default_factory=lambda: str(uuid4()),
         description="Auto-generated UUID for request tracking used if not passed in request",
     )
-    records: Dict[Literal["concepts"], Any] = Field(..., description="Dictionary containing 'concepts' keys")
+    records: Optional[Dict[Literal["concepts"], Any]] = Field(None, description="Dictionary containing 'concepts' keys. Not required for full_graph queries.")
     memory_type: Optional[str] = Field(default=None, min_length=1, description="Memory type")
     mas_id: Optional[str] = Field(default=None, min_length=1, description="ID for the Multi-Agent System")
     wksp_id: Optional[str] = Field(default=None, min_length=1, description="ID for the Workspace")
@@ -378,6 +395,11 @@ class KnowledgeGraphQueryRequest(BaseModel):
     @model_validator(mode="after")
     def validate_concepts_count_for_query_type(self) -> "KnowledgeGraphQueryRequest":
         """Validate that the number of concepts matches the query type requirements."""
+        query_type = self.query_criteria.query_type if self.query_criteria else QUERY_TYPE_NEIGHBOUR
+
+        if query_type == QUERY_TYPE_FULL_GRAPH:
+            return self
+
         if not self.records or "concepts" not in self.records:
             raise ValueError("Records must exist with 'concepts' key")
 
@@ -386,7 +408,6 @@ class KnowledgeGraphQueryRequest(BaseModel):
             raise ValueError("concepts must be a list")
 
         concepts_count = len(concepts)
-        query_type = self.query_criteria.query_type if self.query_criteria else QUERY_TYPE_NEIGHBOUR
 
         if query_type == QUERY_TYPE_PATH:
             if concepts_count != 2:
@@ -398,7 +419,6 @@ class KnowledgeGraphQueryRequest(BaseModel):
             if concepts_count != 1:
                 raise ValueError("Concept queries require exactly 1 concept")
         else:
-            # Default to neighbor query for QUERY_TYPE_NEIGHBOUR or any other type
             if concepts_count != 1:
                 raise ValueError("Neighbor queries require exactly 1 concept")
 
