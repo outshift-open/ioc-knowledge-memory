@@ -122,7 +122,7 @@ class KnowledgeVectorService:
 
     def create_vector_store(self, data: KnowledgeVectorStoreRequest) -> KnowledgeVectorStoreResponse:
         request_id = data.request_id
-        self.logger.info(f"Upserting vectorstore: {data}")
+        self.logger.debug(f"Upserting vectorstore: {data}")
 
         try:
             # Check if MAS store exists
