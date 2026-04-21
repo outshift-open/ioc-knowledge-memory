@@ -17,10 +17,13 @@ from server.schemas.knowledge_vector import (
     KnowledgeVectorQueryResponseRecord,
     KnowledgeVectorDeleteRequest,
     KnowledgeVectorDeleteResponse,
+    KnowledgeVectorSimilaritySearchRequest,
+    KnowledgeVectorSimilaritySearchResponse,
+    KnowledgeVectorSimilaritySearchResult,
     ResponseStatus,
 )
 
-WORKSPACE_SCHEMA_PREFIX = "workspace_"
+MAS_SCHEMA_PREFIX = "mas_"
 
 
 class KnowledgeVectorService:
@@ -56,35 +59,35 @@ class KnowledgeVectorService:
         denormalized_id = normalized_id.replace("_", "-")
         return denormalized_id
 
-    def get_schema_name(self, wksp_id: str) -> str:
+    def get_schema_name(self, mas_id: str) -> str:
         """
-        Helper method to generate the schema name for a workspace.
+        Helper method to generate the schema name for a MAS.
 
         Args:
-            wksp_id: Workspace ID
+            mas_id: MAS ID
 
         Returns:
-            str: Normalized schema name with workspace prefix
+            str: Normalized schema name with MAS prefix
         """
-        return WORKSPACE_SCHEMA_PREFIX + self._normalize_id(wksp_id)
+        return MAS_SCHEMA_PREFIX + self._normalize_id(mas_id)
 
-    def _workspace_exists(self, wksp_id: str) -> bool:
+    def _mas_exists(self, mas_id: str) -> bool:
         """
-        Check if a workspace exists by verifying its schema exists.
+        Check if a MAS store exists by verifying its schema exists.
 
         Args:
-            wksp_id: Workspace ID to check
+            mas_id: MAS ID to check
 
         Returns:
-            bool: True if workspace exists, False otherwise
+            bool: True if MAS store exists, False otherwise
         """
         try:
             db = VectorDB()
-            schema_name = self.get_schema_name(wksp_id)
+            schema_name = self.get_schema_name(mas_id)
             schema_info = db.get_schema(schema_name)
             return schema_info is not None
         except Exception as e:
-            self.logger.error(f"Error checking workspace existence for {wksp_id}: {str(e)}")
+            self.logger.error(f"Error checking MAS store existence for {mas_id}: {str(e)}")
             return False
 
     def onboard(self, store_id: str, data: KnowledgeVectorStoreOnboardRequest) -> KnowledgeVectorStoreOnboardResponse:
@@ -94,7 +97,7 @@ class KnowledgeVectorService:
         try:
             db = VectorDB()
 
-            # Normalize schema name and create schema and table using onboard method
+            # Normalize schema name using MAS ID and create schema and table using onboard method
             schema_name = self.get_schema_name(store_id)
             onboard_success = db.onboard(schema_name)
 
@@ -122,20 +125,20 @@ class KnowledgeVectorService:
         self.logger.info(f"Upserting vectorstore: {data}")
 
         try:
-            # Check if workspace exists
-            if not self._workspace_exists(data.wksp_id):
-                self.logger.warning(f"Workspace {data.wksp_id} not found for request: {request_id}")
+            # Check if MAS store exists
+            if not self._mas_exists(data.mas_id):
+                self.logger.warning(f"MAS store {data.mas_id} not found for request: {request_id}")
                 return KnowledgeVectorStoreResponse(
                     request_id=request_id,
                     status=ResponseStatus.NOT_FOUND,
-                    message=f"Workspace {data.wksp_id} not found",
+                    message=f"MAS store {data.mas_id} not found",
                 )
 
             db = VectorDB()
 
             # Convert to VectorDBStoreRequest and save records
             vector_request = VectorDBStoreRequest()
-            vector_request.schema_name = self.get_schema_name(data.wksp_id)
+            vector_request.schema_name = self.get_schema_name(data.mas_id)
             vector_request.mas_id = data.mas_id
             vector_request.wksp_id = data.wksp_id
             vector_request.records = data.records
@@ -167,19 +170,19 @@ class KnowledgeVectorService:
         self.logger.info(f"Querying vectorstore: {data}")
 
         try:
-            # Check if workspace exists
-            if not self._workspace_exists(data.wksp_id):
-                self.logger.warning(f"Workspace {data.wksp_id} not found for request: {request_id}")
+            # Check if MAS store exists
+            if not self._mas_exists(data.mas_id):
+                self.logger.warning(f"MAS store {data.mas_id} not found for request: {request_id}")
                 return KnowledgeVectorQueryResponse(
                     request_id=request_id,
                     status=ResponseStatus.NOT_FOUND,
-                    message=f"Workspace {data.wksp_id} not found",
+                    message=f"MAS store {data.mas_id} not found",
                 )
 
             db = VectorDB()
 
             # Create query request for database layer
-            schema_name = self.get_schema_name(data.wksp_id)
+            schema_name = self.get_schema_name(data.mas_id)
 
             # Create query request for database layer
             query_request = VectorDBQueryRequest(
@@ -199,6 +202,9 @@ class KnowledgeVectorService:
                         "content": result["content"],
                         "embedding": {"data": result["embedding"]},
                     }
+
+                    if result.get("metadata") is not None:
+                        record_data["metadata"] = result["metadata"]
 
                     # Add timestamps if they exist in the result
                     if "created_at" in result:
@@ -233,6 +239,56 @@ class KnowledgeVectorService:
                 request_id=request_id, status=ResponseStatus.FAILURE, message=f"Internal error: {str(e)}"
             )
 
+    def similarity_search(
+        self, data: KnowledgeVectorSimilaritySearchRequest
+    ) -> KnowledgeVectorSimilaritySearchResponse:
+        """Find document embeddings nearest to a query vector."""
+        request_id = data.request_id
+        try:
+            if not self._mas_exists(data.mas_id):
+                return KnowledgeVectorSimilaritySearchResponse(
+                    request_id=request_id,
+                    status=ResponseStatus.NOT_FOUND,
+                    message=f"MAS store {data.mas_id} not found",
+                )
+
+            db = VectorDB()
+            schema_name = self.get_schema_name(data.mas_id)
+            rows = db.similarity_search(
+                schema_name=schema_name,
+                wksp_id=data.wksp_id,
+                mas_id=data.mas_id,
+                query_vector=data.embedding,
+                limit=data.limit,
+                metric=data.metric,
+                metadata_filter=data.metadata_filter.model_dump(exclude_none=True) if data.metadata_filter else None,
+            )
+
+            results = [
+                KnowledgeVectorSimilaritySearchResult(
+                    score=row["distance"],
+                    id=row["id"],
+                    content=row["content"],
+                    metadata=row.get("metadata"),
+                    embedding_vector=row["embedding"] if row["embedding"] else None,
+                )
+                for row in rows
+            ]
+            return KnowledgeVectorSimilaritySearchResponse(
+                request_id=request_id,
+                status=ResponseStatus.SUCCESS,
+                message=f"Found {len(results)} results",
+                results=results if results else None,
+            )
+        except Exception as e:
+            error_msg = f"Similarity search failed: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return KnowledgeVectorSimilaritySearchResponse(
+                request_id=request_id,
+                status=ResponseStatus.FAILURE,
+                message=error_msg,
+            )
+
     def delete_vector_store(self, data: KnowledgeVectorDeleteRequest) -> KnowledgeVectorDeleteResponse:
         """
         Delete a vector record from the vector store.
@@ -249,17 +305,17 @@ class KnowledgeVectorService:
         )
 
         try:
-            # Check if workspace exists
-            if not self._workspace_exists(data.wksp_id):
-                self.logger.warning(f"Workspace {data.wksp_id} not found for request: {request_id}")
+            # Check if MAS store exists
+            if not self._mas_exists(data.mas_id):
+                self.logger.warning(f"MAS store {data.mas_id} not found for request: {request_id}")
                 return KnowledgeVectorDeleteResponse(
                     request_id=request_id,
                     status=ResponseStatus.NOT_FOUND,
-                    message=f"Workspace {data.wksp_id} not found",
+                    message=f"MAS store {data.mas_id} not found",
                 )
 
-            # Get schema name for the workspace
-            schema_name = self.get_schema_name(data.wksp_id)
+            # Get schema name for the MAS
+            schema_name = self.get_schema_name(data.mas_id)
 
             # Initialize database connection
             db = VectorDB()
@@ -294,7 +350,7 @@ class KnowledgeVectorService:
         Internal method to hard delete a vector store schema and all associated data.
 
         Args:
-            store_id: Store ID to delete (used as workspace ID)
+            store_id: Store ID to delete (used as MAS ID)
             data: Delete request data
 
         Returns:
@@ -304,7 +360,7 @@ class KnowledgeVectorService:
         self.logger.info(f"Internal delete vector store: request_id='{request_id}' store_id='{store_id}'")
 
         try:
-            # Get schema name for the store
+            # Get schema name for the MAS store
             schema_name = self.get_schema_name(store_id)
 
             # Initialize database connection

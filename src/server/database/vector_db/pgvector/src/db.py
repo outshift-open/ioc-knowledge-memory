@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 import logging
 from typing import List, Dict, Optional
 
@@ -186,7 +187,8 @@ class VectorDB:
                         wksp_uuid UUID NOT NULL,
                         mas_uuid UUID NOT NULL,
                         document_txt VARCHAR NOT NULL,
-                        embedding_vector VECTOR({EMBEDDING_VECTOR_SIZE}) NOT NULL
+                        embedding_vector VECTOR({EMBEDDING_VECTOR_SIZE}) NOT NULL,
+                        metadata JSONB NULL
                     )
                 """
                 conn.execute(text(create_table_query))
@@ -242,6 +244,21 @@ class VectorDB:
                 conn.execute(text(create_id_index_query))
                 self.logger.info(f"Ensured index exists on id in schema '{schema_name}'")
 
+                # Expression indexes on known metadata filter fields — deferred until needed at scale.
+                # Uncomment and run a migration when metadata filter queries become slow.
+                #
+                # metadata_indexes = [
+                #     ("doc_index",              "((metadata->>'doc_index')::INTEGER)"),
+                #     ("chunk_index",            "((metadata->>'chunk_index')::INTEGER)"),
+                #     ("data_source",            "(metadata->>'data_source')"),
+                #     ("recorded_at",            "((metadata->>'recorded_at')::TIMESTAMPTZ)"),
+                # ]
+                # for field, expr in metadata_indexes:
+                #     conn.execute(text(
+                #         f"CREATE INDEX IF NOT EXISTS document_embeddings_metadata_{field}_idx"
+                #         f" ON \"{schema_name}\".document_embeddings ({expr})"
+                #     ))
+
                 # If we reach here, all operations were successful
                 self.logger.info(f"Successfully onboarded schema '{schema_name}' with document_embeddings table")
                 return True
@@ -279,13 +296,14 @@ class VectorDB:
                         embedding_str = str(record.embedding.data).replace(" ", "")
 
                         upsert_query = f"""
-                            INSERT INTO {table_name} (id, wksp_uuid, mas_uuid, document_txt, embedding_vector, created_at) 
-                            VALUES (:id, :wksp_uuid, :mas_uuid, :document_txt, :embedding_vector, now())
-                            ON CONFLICT (id) DO UPDATE SET 
+                            INSERT INTO {table_name} (id, wksp_uuid, mas_uuid, document_txt, embedding_vector, metadata, created_at)
+                            VALUES (:id, :wksp_uuid, :mas_uuid, :document_txt, :embedding_vector, :metadata, now())
+                            ON CONFLICT (id) DO UPDATE SET
                                 wksp_uuid = EXCLUDED.wksp_uuid,
                                 mas_uuid = EXCLUDED.mas_uuid,
                                 document_txt = EXCLUDED.document_txt,
                                 embedding_vector = EXCLUDED.embedding_vector,
+                                metadata = EXCLUDED.metadata,
                                 updated_at = now()
                         """
 
@@ -297,6 +315,7 @@ class VectorDB:
                                 "mas_uuid": request.mas_id,
                                 "document_txt": record.content,
                                 "embedding_vector": embedding_str,
+                                "metadata": json.dumps(record.metadata) if record.metadata is not None else None,
                             },
                         )
 
@@ -334,7 +353,7 @@ class VectorDB:
                 if query_type == QUERY_TYPE_INTERNAL_LIST_BY_WKSP_ID:
                     # List all records for workspace
                     query = f"""
-                        SELECT id, document_txt as content, embedding_vector as embedding,
+                        SELECT id, document_txt as content, embedding_vector as embedding, metadata,
                                EXTRACT(EPOCH FROM created_at) as created_at,
                                EXTRACT(EPOCH FROM updated_at) as updated_at
                         FROM {table_name}
@@ -349,7 +368,7 @@ class VectorDB:
                 elif query_type == QUERY_TYPE_INTERNAL_LIST_BY_MAS_ID:
                     # List all records for MAS
                     query = f"""
-                        SELECT id, document_txt as content, embedding_vector as embedding,
+                        SELECT id, document_txt as content, embedding_vector as embedding, metadata,
                                EXTRACT(EPOCH FROM created_at) as created_at,
                                EXTRACT(EPOCH FROM updated_at) as updated_at
                         FROM {table_name}
@@ -364,7 +383,7 @@ class VectorDB:
                 elif query_type == QUERY_TYPE_GET_BY_ID:
                     # Get specific record by ID
                     query = f"""
-                        SELECT id, document_txt as content, embedding_vector as embedding,
+                        SELECT id, document_txt as content, embedding_vector as embedding, metadata,
                                EXTRACT(EPOCH FROM created_at) as created_at,
                                EXTRACT(EPOCH FROM updated_at) as updated_at
                         FROM {table_name}
@@ -380,7 +399,7 @@ class VectorDB:
                     # L2 distance similarity search
                     embedding_str = str(request.query_criteria.embedding.data).replace(" ", "")
                     query = f"""
-                        SELECT id, document_txt as content, embedding_vector as embedding,
+                        SELECT id, document_txt as content, embedding_vector as embedding, metadata,
                                embedding_vector <-> :query_embedding as distance,
                                EXTRACT(EPOCH FROM created_at) as created_at,
                                EXTRACT(EPOCH FROM updated_at) as updated_at
@@ -400,7 +419,7 @@ class VectorDB:
                     # Cosine distance similarity search
                     embedding_str = str(request.query_criteria.embedding.data).replace(" ", "")
                     query = f"""
-                        SELECT id, document_txt as content, embedding_vector as embedding,
+                        SELECT id, document_txt as content, embedding_vector as embedding, metadata,
                                1 - (embedding_vector <=> :query_embedding) as distance,
                                EXTRACT(EPOCH FROM created_at) as created_at,
                                EXTRACT(EPOCH FROM updated_at) as updated_at
@@ -439,6 +458,7 @@ class VectorDB:
                         "id": str(row.id),  # Convert UUID to string
                         "content": row.content,
                         "embedding": embedding_data,
+                        "metadata": row.metadata,
                     }
 
                     # Add timestamps in epoch format
@@ -463,6 +483,98 @@ class VectorDB:
         except SQLAlchemyError as e:
             self.logger.error(f"Failed to query vectors: {str(e)}")
             raise RuntimeError(f"Failed to query vectors: {str(e)}")
+
+    def similarity_search(
+        self,
+        schema_name: str,
+        wksp_id: str,
+        mas_id: str,
+        query_vector: List[float],
+        limit: int = 10,
+        metric: str = "l2",
+        metadata_filter: Optional[Dict] = None,
+    ) -> List[Dict]:
+        """Find document embeddings nearest to a query vector using HNSW index.
+
+        Args:
+            schema_name: Name of the schema containing the table
+            wksp_id: Workspace UUID for filtering
+            mas_id: MAS UUID for filtering
+            query_vector: Query embedding vector
+            limit: Maximum number of results to return
+            metric: Distance metric — 'l2' or 'cosine'
+            metadata_filter: Optional dict with keys: doc_index, chunk_index, data_source,
+                             conversation_timestamp_from, conversation_timestamp_to
+
+        Returns:
+            List of dicts with keys: id, content, embedding, distance, metadata
+
+        Raises:
+            RuntimeError: If there's an error executing the query
+        """
+        operator = "<->" if metric == "l2" else "<=>"
+        vec_str = "[" + ",".join(str(v) for v in query_vector) + "]"
+        table_name = f'"{schema_name}"."{TABLE_NAME}"'
+
+        # Build dynamic metadata filter clauses
+        params: Dict = {"vec": vec_str, "wksp_uuid": wksp_id, "mas_uuid": mas_id, "limit": limit}
+        extra_clauses = ""
+        if metadata_filter:
+            if metadata_filter.get("doc_index") is not None:
+                extra_clauses += " AND (metadata->>'doc_index')::INTEGER = :doc_index"
+                params["doc_index"] = metadata_filter["doc_index"]
+            if metadata_filter.get("chunk_index") is not None:
+                extra_clauses += " AND (metadata->>'chunk_index')::INTEGER = :chunk_index"
+                params["chunk_index"] = metadata_filter["chunk_index"]
+            if metadata_filter.get("data_source") is not None:
+                extra_clauses += " AND metadata->>'data_source' = :data_source"
+                params["data_source"] = metadata_filter["data_source"]
+            if metadata_filter.get("recorded_at_from") is not None:
+                extra_clauses += " AND (metadata->>'recorded_at')::TIMESTAMPTZ >= :ts_from"
+                params["ts_from"] = metadata_filter["recorded_at_from"]
+            if metadata_filter.get("recorded_at_to") is not None:
+                extra_clauses += " AND (metadata->>'recorded_at')::TIMESTAMPTZ < :ts_to"
+                params["ts_to"] = metadata_filter["recorded_at_to"]
+
+        try:
+            with self.connect_db.engine.connect() as conn:
+                result = conn.execute(
+                    text(
+                        f"SELECT id, document_txt AS content, embedding_vector, metadata,"
+                        f" embedding_vector {operator} CAST(:vec AS vector({EMBEDDING_VECTOR_SIZE})) AS distance"
+                        f" FROM {table_name}"
+                        f" WHERE wksp_uuid = :wksp_uuid AND mas_uuid = :mas_uuid AND deleted_at IS NULL"
+                        f"{extra_clauses}"
+                        f" ORDER BY distance"
+                        f" LIMIT :limit"
+                    ),
+                    params,
+                )
+                rows = result.fetchall()
+
+            results = []
+            for row in rows:
+                embedding_data = []
+                if row.embedding_vector:
+                    raw = str(row.embedding_vector).strip("[]")
+                    if raw:
+                        embedding_data = [float(x.strip()) for x in raw.split(",")]
+                results.append(
+                    {
+                        "id": str(row.id),
+                        "content": row.content,
+                        "embedding": embedding_data,
+                        "distance": row.distance,
+                        "metadata": row.metadata if row.metadata is not None else None,
+                    }
+                )
+
+            self.logger.info(f"Similarity search returned {len(results)} records from {table_name}")
+            return results
+
+        except SQLAlchemyError as e:
+            self.logger.error(f"Failed to execute similarity search: {str(e)}")
+            raise RuntimeError(f"Failed to execute similarity search: {str(e)}")
 
     def delete_vector(self, schema_name: str, vector_id: str, soft_delete: bool = True) -> bool:
         """

@@ -47,9 +47,9 @@ def test_ids():
 
 
 @pytest.fixture
-def vector_store_id():
-    """Generate unique vector store ID."""
-    return str(uuid4())
+def vector_store_id(test_ids):
+    """Return the mas_id as the vector store ID (store is now per-MAS)."""
+    return test_ids["mas_id"]
 
 
 # ============================================================================

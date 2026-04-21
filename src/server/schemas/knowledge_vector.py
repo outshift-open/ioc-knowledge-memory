@@ -136,6 +136,7 @@ class KnowledgeVectorStoreRequestRecord(BaseModel):
     id: str = Field(..., description="Unique identifier")
     content: str = Field(..., description="content in plain text")
     embedding: EmbeddingConfig = Field(..., description="Embedding")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Optional arbitrary metadata")
 
 
 class KnowledgeVectorStoreRequest(BaseModel):
@@ -413,6 +414,7 @@ class KnowledgeVectorQueryResponseRecord(BaseModel):
     id: str = Field(..., description="Unique identifier")
     content: str = Field(..., description="content in plain text")
     embedding: EmbeddingConfig = Field(..., description="Embedding configuration")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Metadata associated with the record")
     distance: Optional[float] = Field(default=None, description="Distance between query and record")
     created_at: Optional[int] = Field(default=None, description="Timestamp of record creation in epoch time")
     updated_at: Optional[int] = Field(default=None, description="Timestamp of record update in epoch time")
@@ -421,6 +423,8 @@ class KnowledgeVectorQueryResponseRecord(BaseModel):
     def serialize_model(self) -> Dict[str, Any]:
         """Custom serializer to exclude None fields."""
         data = {"id": self.id, "content": self.content, "embedding": self.embedding}
+        if self.metadata is not None:
+            data["metadata"] = self.metadata
         if self.distance is not None:
             data["distance"] = self.distance
         if self.created_at is not None:
@@ -452,5 +456,71 @@ class KnowledgeVectorQueryResponse(BaseModel):
 
     def model_dump(self, **kwargs) -> Dict[str, Any]:
         """Override model_dump to ensure exclude_none is always applied."""
+        kwargs.setdefault("exclude_none", True)
+        return super().model_dump(**kwargs)
+
+
+# Similarity search models
+
+
+class MetadataFilter(BaseModel):
+    """Optional metadata filters for similarity search."""
+
+    doc_index: Optional[int] = Field(default=None, description="Filter by doc_index (integer equality)")
+    chunk_index: Optional[int] = Field(default=None, description="Filter by chunk_index (integer equality)")
+    data_source: Optional[str] = Field(default=None, description="Filter by data_source (string equality)")
+    recorded_at_from: Optional[str] = Field(
+        default=None, description="Filter recorded_at >= this value (ISO 8601)"
+    )
+    recorded_at_to: Optional[str] = Field(
+        default=None, description="Filter recorded_at < this value (ISO 8601)"
+    )
+
+
+class KnowledgeVectorSimilaritySearchRequest(BaseModel):
+    """Request for vector similarity search over document embeddings."""
+
+    request_id: str = Field(
+        default_factory=lambda: str(uuid4()), description="Auto-generated UUID for request tracking"
+    )
+    wksp_id: str = Field(min_length=1, description="ID for the Workspace")
+    mas_id: str = Field(min_length=1, description="ID for the Multi-Agent System")
+    embedding: List[float] = Field(..., description="Query embedding vector")
+    limit: int = Field(default=10, ge=1, le=100, description="Maximum number of results to return")
+    metric: Literal["cosine", "l2"] = Field(default="l2", description="Distance metric")
+    metadata_filter: Optional[MetadataFilter] = Field(default=None, description="Optional metadata filters")
+
+    @model_validator(mode="after")
+    def validate_mas_and_wksp_id(self) -> "KnowledgeVectorSimilaritySearchRequest":
+        if not self.mas_id or not self.wksp_id:
+            raise ValueError("Both 'mas_id' and 'wksp_id' must be provided")
+        return self
+
+
+class KnowledgeVectorSimilaritySearchResult(BaseModel):
+    """A single similarity search result."""
+
+    score: float = Field(..., description="Distance from query vector")
+    id: str = Field(..., description="Record ID")
+    content: str = Field(..., description="Document text content")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Metadata associated with the record")
+    embedding_vector: Optional[List[float]] = Field(
+        default=None, description="Embedding vector (only populated when include_embeddings=true)"
+    )
+
+
+class KnowledgeVectorSimilaritySearchResponse(BaseModel):
+    """Response for vector similarity search."""
+
+    model_config = ConfigDict(exclude_none=True)
+
+    request_id: Optional[str] = Field(None, description="UUID for request tracking")
+    status: ResponseStatus = Field(..., description="Status of the request")
+    message: Optional[str] = Field(None, description="Optional message")
+    results: Optional[List[KnowledgeVectorSimilaritySearchResult]] = Field(
+        default=None, description="Similarity search results"
+    )
+
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
         kwargs.setdefault("exclude_none", True)
         return super().model_dump(**kwargs)

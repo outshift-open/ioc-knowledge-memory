@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from fastapi import APIRouter, status, Request, HTTPException
+from fastapi import APIRouter, Query, status, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -17,6 +17,8 @@ from server.schemas.knowledge_vector import (
     KnowledgeVectorQueryResponse,
     KnowledgeVectorDeleteRequest,
     KnowledgeVectorDeleteResponse,
+    KnowledgeVectorSimilaritySearchRequest,
+    KnowledgeVectorSimilaritySearchResponse,
     ResponseStatus,
 )
 from server.services.knowledge_vector import knowledge_vector_service
@@ -167,6 +169,40 @@ def query_vector_store(data: KnowledgeVectorQueryRequest):
     return JSONResponse(content=response.model_dump(), status_code=status_code)
 
 
+@router.post(
+    "/query/similarity",
+    response_model=KnowledgeVectorSimilaritySearchResponse,
+    responses={
+        200: {"description": "Similarity search executed successfully"},
+        400: {"description": "Bad request - validation error"},
+        404: {"description": "Not found"},
+        500: {"description": "Internal server error"},
+    },
+)
+def similarity_search(
+    data: KnowledgeVectorSimilaritySearchRequest,
+    include_embeddings: bool = Query(
+        default=False, description="Include embedding vectors in response (debug only)"
+    ),
+):
+    """
+    Find document embeddings nearest to a query embedding vector using HNSW index.
+    """
+    response = knowledge_vector_service.similarity_search(data)
+    if not include_embeddings and response.results:
+        for result in response.results:
+            result.embedding_vector = None
+    if response.status == ResponseStatus.SUCCESS:
+        status_code = status.HTTP_200_OK
+    elif response.status == ResponseStatus.VALIDATION_ERROR:
+        status_code = status.HTTP_400_BAD_REQUEST
+    elif response.status == ResponseStatus.NOT_FOUND:
+        status_code = status.HTTP_404_NOT_FOUND
+    else:
+        status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    return JSONResponse(content=response.model_dump(), status_code=status_code)
+
+
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Handle validation errors specifically for knowledge vector endpoints."""
 
@@ -184,7 +220,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     path = request.url.path
     method = request.method
 
-    if method == "POST" and path.endswith("/query"):
+    if method == "POST" and path.endswith("/query/similarity"):
+        # Similarity search endpoint
+        response = KnowledgeVectorSimilaritySearchResponse(status=ResponseStatus.VALIDATION_ERROR, message=message)
+    elif method == "POST" and path.endswith("/query"):
         # Query endpoint - use KnowledgeVectorQueryResponse
         response = KnowledgeVectorQueryResponse(status=ResponseStatus.VALIDATION_ERROR, message=message)
     elif method == "POST" and path.endswith("/stores/onboard"):
