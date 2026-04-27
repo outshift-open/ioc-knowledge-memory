@@ -378,6 +378,23 @@ class TestKnowledgeGraphEndpoints:
         assert response.json()["request_id"] == "test-request-id"
         assert response.json()["status"] == "failure"
 
+    @patch("server.api.endpoints.knowledge_graph.knowledge_graph_service.similarity_search")
+    def test_similarity_search_not_found(self, mock_search):
+        """Test 404 response when the graph is not found."""
+        mock_response = KnowledgeGraphSimilaritySearchResponse(
+            request_id="test-request-id",
+            status="not found",
+            message="Graph 'test-mas' not found",
+        )
+        mock_search.return_value = mock_response
+
+        response = test_client.post("/knowledge/graph/query/similarity", json=TEST_SIMILARITY_SEARCH_REQUEST)
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json()["request_id"] == "test-request-id"
+        assert response.json()["status"] == "not found"
+        assert "not found" in response.json()["message"]
+
     def test_similarity_search_missing_mas_and_wksp_id(self):
         """Test validation error when both mas_id and wksp_id are missing."""
         invalid_request = {

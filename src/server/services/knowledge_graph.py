@@ -208,6 +208,13 @@ class KnowledgeGraphService:
             graph = adapter.get_graph_name(data.model_dump())
 
             db = GraphDB()
+            if db.get_graph(graph) is None:
+                return KnowledgeGraphSimilaritySearchResponse(
+                    request_id=request_id,
+                    status=ResponseStatus.NOT_FOUND,
+                    message=f"Graph '{graph}' not found",
+                )
+
             rows = db.similarity_search(
                 graph=graph,
                 query_vector=data.embedding,

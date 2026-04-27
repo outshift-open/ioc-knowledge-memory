@@ -118,6 +118,7 @@ def query_graph_store(data: KnowledgeGraphQueryRequest):
     responses={
         200: {"description": "Similarity search executed successfully"},
         400: {"description": "Bad request - validation error"},
+        404: {"description": "Not found"},
         500: {"description": "Internal server error"},
     },
 )
@@ -139,6 +140,8 @@ def similarity_search(
         status_code = status.HTTP_200_OK
     elif response.status == ResponseStatus.VALIDATION_ERROR:
         status_code = status.HTTP_400_BAD_REQUEST
+    elif response.status == ResponseStatus.NOT_FOUND:
+        status_code = status.HTTP_404_NOT_FOUND
     else:
         status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     return JSONResponse(content=response.model_dump(), status_code=status_code)
