@@ -1,6 +1,6 @@
 [project]
 name = "ioc-knowledge-memory"
-version = "0.2.2"
+version = "0.2.3"
 description = "Package for IoC knowledge management"
 authors = [
     {name = "Outshift by Cisco",email = "outshiftbycisco@cisco.com"}
