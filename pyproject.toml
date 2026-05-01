@@ -5,8 +5,6 @@ description = "Package for IoC knowledge management"
 authors = [
     {name = "Outshift by Cisco",email = "outshiftbycisco@cisco.com"}
 ]
-homepage = "https://github.com/outshift-open/ioc-knowledge-memory"
-repository = "https://github.com/outshift-open/ioc-knowledge-memory"
 readme = "README.md"
 requires-python = ">=3.10,<4.0.0"
 dependencies = [
@@ -24,6 +22,10 @@ dependencies = [
     "pgvector==0.4.2",
     "urllib3>=2.6.3",
 ]
+
+[project.urls]
+Homepage = "https://github.com/outshift-open/ioc-knowledge-memory"
+Repository = "https://github.com/outshift-open/ioc-knowledge-memory"
 
 [project.optional-dependencies]
 dev = [
