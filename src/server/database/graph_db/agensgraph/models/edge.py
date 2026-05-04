@@ -7,6 +7,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Any
 
+from server.database.graph_db.agensgraph.src.db import quote_relation_type
+
 
 @dataclass
 class Edge:
@@ -93,12 +95,14 @@ class Edge:
         props = ", ".join([f"{k}: %s" for k in properties.keys()])
 
         # Determine the relationship pattern based on direction
+        # Quote the relation type to handle reserved Cypher keywords (e.g. REFERENCES)
+        quoted_rel = quote_relation_type(self.relation)
         if self.direction == "->":
-            rel_pattern = f"(a)-[r:{self.relation} {{ {props} }}]->(b)"
+            rel_pattern = f"(a)-[r:{quoted_rel} {{ {props} }}]->(b)"
         elif self.direction == "<-":
-            rel_pattern = f"(a)<-[r:{self.relation} {{ {props} }}]-(b)"
+            rel_pattern = f"(a)<-[r:{quoted_rel} {{ {props} }}]-(b)"
         else:  # undirected
-            rel_pattern = f"(a)-[r:{self.relation} {{ {props} }}]-(b)"
+            rel_pattern = f"(a)-[r:{quoted_rel} {{ {props} }}]-(b)"
 
         # Build the query to check node existence and create relationship
         query = f"MATCH (a {{id: %s}}), (b {{id: %s}}) CREATE {rel_pattern} RETURN r"

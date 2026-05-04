@@ -65,7 +65,7 @@ class TestEdge:
 
         # Check the parameterized query format (uses %s placeholders)
         assert "MATCH (a {id: %s}), (b {id: %s})" in query
-        assert "CREATE (a)-[r:RELATES_TO { since: %s, active: %s, id: %s }]->(b)" in query
+        assert 'CREATE (a)-[r:"RELATES_TO" { since: %s, active: %s, id: %s }]->(b)' in query
         assert "RETURN r" in query
 
         # Check parameters (tuple format: source_id, target_id, then property values)

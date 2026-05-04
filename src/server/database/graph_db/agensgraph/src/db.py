@@ -10,6 +10,33 @@ import agensgraph
 
 from server.database.connection import ConnectDB
 from server.schemas.knowledge_vector import EMBEDDING_VECTOR_SIZE
+from server.schemas.knowledge_graph import KnowledgeGraphQueryCriteriaFilter, FilterOperation
+
+
+def quote_relation_type(relation_type: str) -> str:
+    """Quote relation type for Cypher queries to handle reserved keywords and special characters.
+    
+    Args:
+        relation_type: The relation type string
+        
+    Returns:
+        Quoted relation type string
+    """
+    return f'"{relation_type}"'
+
+
+def unquote_relation_type(quoted_relation: str) -> str:
+    """Remove quotes from relation type for comparison and processing.
+    
+    Args:
+        quoted_relation: The quoted relation type string
+        
+    Returns:
+        Unquoted relation type string
+    """
+    if quoted_relation.startswith('"') and quoted_relation.endswith('"'):
+        return quoted_relation[1:-1]
+    return quoted_relation
 
 
 class GraphDB:
@@ -553,6 +580,346 @@ class GraphDB:
 
         except Exception as e:
             error_msg = f"Failed to fetch graph '{graph_name}': {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return False, {}, error_msg
+
+    def _get_properties_filter_query_helper(self, operation: str, target_field: str, value: list) -> str:
+        """Helper method to generate WHERE clauses for regular property filtering.
+        
+        Args:
+            operation: The filter operation (FilterOperation enum value)
+            target_field: The target field to filter on (e.g., "n.name" or "r.weight")
+            value: The filter value(s)
+            
+        Returns:
+            WHERE clause string for the given operation and field
+        """
+        match operation:
+            case FilterOperation.EQSTR:
+                # String equality comparison
+                escaped_value = value[0].replace("'", "\\'")
+                return f"{target_field} IS NOT NULL AND {target_field} = '{escaped_value}'"
+            case FilterOperation.EQ:
+                # Numeric equality
+                return f"{target_field} IS NOT NULL AND {target_field} = {value[0]}"
+            case FilterOperation.GT:
+                # Greater than
+                return f"{target_field} IS NOT NULL AND {target_field} > {value[0]}"
+            case FilterOperation.GTE:
+                # Greater than or equal
+                return f"{target_field} IS NOT NULL AND {target_field} >= {value[0]}"
+            case FilterOperation.LT:
+                # Less than
+                return f"{target_field} IS NOT NULL AND {target_field} < {value[0]}"
+            case FilterOperation.LTE:
+                # Less than or equal
+                return f"{target_field} IS NOT NULL AND {target_field} <= {value[0]}"
+            case FilterOperation.RANGE:
+                # Range comparison
+                return f"{target_field} IS NOT NULL AND {target_field} >= {value[0]} AND {target_field} <= {value[1]}"
+            case _:
+                raise ValueError(f"Unsupported operation '{operation}' for property filtering")
+
+    def _get_concepts_filter_query(self, graph_name: str, concepts_filter=None) -> tuple[bool, str, str]:
+        """Build a Cypher query based on key-operation-value filter structure.
+        
+        Args:
+            graph_name: Name of the graph to query
+            concepts_filter: KnowledgeGraphQueryCriteriaFilter with key, operation, value
+            
+        Returns:
+            Tuple containing (success: bool, query: str, error_msg: str)
+        """
+        try:
+            # Define node clause once for the entire method
+            node_clause = "collect(n) as nodes"
+            
+            if not concepts_filter:
+                # Default query - get all nodes
+                return True, f"MATCH (n) RETURN {node_clause}", ""
+            
+            key = concepts_filter.key
+            operation = concepts_filter.operation
+            value = concepts_filter.value
+            
+            # Validate operation against schema constants
+            if operation not in KnowledgeGraphQueryCriteriaFilter.OPERATION_ALLOW:
+                return False, "", f"Error: Unsupported operation '{operation}'. Must be one of: {KnowledgeGraphQueryCriteriaFilter.OPERATION_ALLOW}"
+            
+            # Determine base query based on key type
+            match key:
+                case KnowledgeGraphQueryCriteriaFilter.KEY_RELATIONS_CNT:
+                    base_query = "MATCH (n) WITH n, size((n)-[]-()) as relation_count"
+                    target_field = "relation_count"
+                case _:
+                    base_query = "MATCH (n)"
+                    target_field = f"n.{key}"
+            
+            # Build where clause based on operation
+            match operation:
+                case FilterOperation.EQSTR:
+                    match key:
+                        case KnowledgeGraphQueryCriteriaFilter.KEY_RELATIONS_CNT:
+                            return False, "", f"Error: relations_cnt key cannot use eqstr operation"
+                        case _:
+                            # Regular property filtering using helper
+                            where_clause = self._get_properties_filter_query_helper(operation, target_field, value)
+                        
+                case FilterOperation.EQ:
+                    match key:
+                        case KnowledgeGraphQueryCriteriaFilter.KEY_RELATIONS_CNT:
+                            # Computed relation count equality
+                            where_clause = f"{target_field} = {value[0]}"
+                        case _:
+                            # Regular property filtering using helper
+                            where_clause = self._get_properties_filter_query_helper(operation, target_field, value)
+                        
+                case FilterOperation.GT:
+                    match key:
+                        case KnowledgeGraphQueryCriteriaFilter.KEY_RELATIONS_CNT:
+                            # Computed relation count greater than
+                            where_clause = f"{target_field} > {value[0]}"
+                        case _:
+                            # Regular property filtering using helper
+                            where_clause = self._get_properties_filter_query_helper(operation, target_field, value)
+                        
+                case FilterOperation.GTE:
+                    match key:
+                        case KnowledgeGraphQueryCriteriaFilter.KEY_RELATIONS_CNT:
+                            # Computed relation count greater than or equal
+                            where_clause = f"{target_field} >= {value[0]}"
+                        case _:
+                            # Regular property filtering using helper
+                            where_clause = self._get_properties_filter_query_helper(operation, target_field, value)
+                        
+                case FilterOperation.LT:
+                    match key:
+                        case KnowledgeGraphQueryCriteriaFilter.KEY_RELATIONS_CNT:
+                            # Computed relation count less than
+                            where_clause = f"{target_field} < {value[0]}"
+                        case _:
+                            # Regular property filtering using helper
+                            where_clause = self._get_properties_filter_query_helper(operation, target_field, value)
+                        
+                case FilterOperation.LTE:
+                    match key:
+                        case KnowledgeGraphQueryCriteriaFilter.KEY_RELATIONS_CNT:
+                            # Computed relation count less than or equal
+                            where_clause = f"{target_field} <= {value[0]}"
+                        case _:
+                            # Regular property filtering using helper
+                            where_clause = self._get_properties_filter_query_helper(operation, target_field, value)
+                        
+                case FilterOperation.RANGE:
+                    match key:
+                        case KnowledgeGraphQueryCriteriaFilter.KEY_RELATIONS_CNT:
+                            # Computed relation count range
+                            where_clause = f"{target_field} >= {value[0]} AND {target_field} <= {value[1]}"
+                        case _:
+                            # Regular property filtering using helper
+                            where_clause = self._get_properties_filter_query_helper(operation, target_field, value)
+                        
+                case _:
+                    return False, "", f"Error: Unsupported operation '{operation}'"
+            
+            # Build final query once
+            query = f"{base_query} WHERE {where_clause} RETURN {node_clause}"
+            
+            return True, query, ""
+            
+        except Exception as e:
+            error_msg = f"Failed to build filter query: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return False, "", error_msg
+
+    def get_all_concepts(self, graph_name: str, concepts_filter=None) -> tuple[bool, dict, str]:
+        """Fetch all nodes from the given graph with optional filtering.
+
+        Args:
+            graph_name: Name of the graph to fetch from
+            concepts_filter: Optional List[KnowledgeGraphQueryCriteriaFilter] for filtering (uses first element)
+
+        Returns:
+            Tuple containing (success: bool, data: dict with 'nodes' list, msg: str)
+        """
+        try:
+            # Build query using generic filter function - pass first element of array
+            filter_element = concepts_filter[0] if concepts_filter and len(concepts_filter) > 0 else None
+            success, query, error_msg = self._get_concepts_filter_query(graph_name, filter_element)
+            if not success:
+                return False, {}, error_msg
+
+            with self.connect_db.engine.connect() as conn:
+                conn.exec_driver_sql(f'SET graph_path = "{graph_name}"')
+
+                node_result = conn.exec_driver_sql(query).fetchone()
+                nodes_raw = [dict(n) for n in node_result[0]] if node_result and node_result[0] else []
+
+            filter_msg = ""
+            if filter_element:
+                key = filter_element.key
+                operation = filter_element.operation
+                value = filter_element.value
+                
+                if operation == "range":
+                    filter_msg = f" (filtered by {key} {operation} [{value[0]}, {value[1]}])"
+                else:
+                    filter_msg = f" (filtered by {key} {operation} {value[0]})"
+            
+            msg = f"Found {len(nodes_raw)} nodes in graph '{graph_name}'{filter_msg}"
+            return True, {"nodes": nodes_raw}, msg
+
+        except Exception as e:
+            error_msg = f"Failed to fetch graph '{graph_name}': {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return False, {}, error_msg
+
+    def _get_relations_filter_query(self, graph_name: str, relations_filter=None) -> tuple[bool, str, str]:
+        """Build a Cypher query based on key-operation-value filter structure for relations.
+        
+        Args:
+            graph_name: Name of the graph to query
+            relations_filter: KnowledgeGraphQueryCriteriaFilter with key, operation, value
+            
+        Returns:
+            Tuple containing (success: bool, query: str, error_msg: str)
+        """
+        try:
+            # Define relation clause once for the entire method
+            relation_clause = "collect(r) as relations"
+            
+            if not relations_filter:
+                # Default query - get all relations
+                return True, f"MATCH ()-[r]->() RETURN {relation_clause}", ""
+            
+            key = relations_filter.key
+            operation = relations_filter.operation
+            value = relations_filter.value
+            
+            # Validate operation against schema constants
+            if operation not in KnowledgeGraphQueryCriteriaFilter.OPERATION_ALLOW:
+                return False, "", f"Error: Unsupported operation '{operation}'. Must be one of: {KnowledgeGraphQueryCriteriaFilter.OPERATION_ALLOW}"
+            
+            # Determine base query based on key type
+            match key:
+                case KnowledgeGraphQueryCriteriaFilter.KEY_RELATION:
+                    # Quote the relation type to match how relations are created
+                    quoted_relation = quote_relation_type(value[0])
+                    base_query = f"MATCH ()-[r:{quoted_relation}]->()"
+                    target_field = "relation_type"  # Special case - no actual field needed
+                case _:
+                    base_query = "MATCH ()-[r]->()"
+                    target_field = f"r.{key}"
+            
+            # Build where clause based on operation
+            match operation:
+                case FilterOperation.EQSTR:
+                    match key:
+                        case KnowledgeGraphQueryCriteriaFilter.KEY_RELATION:
+                            # For relation type, EQSTR is the only valid operation
+                            where_clause = ""  # No WHERE clause needed, filtering is in MATCH
+                        case _:
+                            # Regular property filtering using helper
+                            where_clause = self._get_properties_filter_query_helper(operation, target_field, value)
+                        
+                case FilterOperation.EQ:
+                    match key:
+                        case KnowledgeGraphQueryCriteriaFilter.KEY_RELATION:
+                            return False, "", f"Error: Relation type key only supports EQSTR operation, got '{operation}'"
+                        case _:
+                            # Regular property filtering using helper
+                            where_clause = self._get_properties_filter_query_helper(operation, target_field, value)
+                        
+                case FilterOperation.GT:
+                    match key:
+                        case KnowledgeGraphQueryCriteriaFilter.KEY_RELATION:
+                            return False, "", f"Error: Relation type key only supports EQSTR operation, got '{operation}'"
+                        case _:
+                            # Regular property filtering using helper
+                            where_clause = self._get_properties_filter_query_helper(operation, target_field, value)
+                        
+                case FilterOperation.GTE:
+                    match key:
+                        case KnowledgeGraphQueryCriteriaFilter.KEY_RELATION:
+                            return False, "", f"Error: Relation type key only supports EQSTR operation, got '{operation}'"
+                        case _:
+                            # Regular property filtering using helper
+                            where_clause = self._get_properties_filter_query_helper(operation, target_field, value)
+                        
+                case FilterOperation.LT:
+                    match key:
+                        case KnowledgeGraphQueryCriteriaFilter.KEY_RELATION:
+                            return False, "", f"Error: Relation type key only supports EQSTR operation, got '{operation}'"
+                        case _:
+                            # Regular property filtering using helper
+                            where_clause = self._get_properties_filter_query_helper(operation, target_field, value)
+                        
+                case FilterOperation.LTE:
+                    match key:
+                        case KnowledgeGraphQueryCriteriaFilter.KEY_RELATION:
+                            return False, "", f"Error: Relation type key only supports EQSTR operation, got '{operation}'"
+                        case _:
+                            # Regular property filtering using helper
+                            where_clause = self._get_properties_filter_query_helper(operation, target_field, value)
+                        
+                case FilterOperation.RANGE:
+                    match key:
+                        case KnowledgeGraphQueryCriteriaFilter.KEY_RELATION:
+                            return False, "", f"Error: Relation type key only supports EQSTR operation, got '{operation}'"
+                        case _:
+                            # Regular property filtering using helper
+                            where_clause = self._get_properties_filter_query_helper(operation, target_field, value)
+                        
+                case _:
+                    return False, "", f"Error: Unsupported operation '{operation}'"
+            
+            # Build final query once
+            if where_clause:
+                query = f"{base_query} WHERE {where_clause} RETURN {relation_clause}"
+            else:
+                query = f"{base_query} RETURN {relation_clause}"
+            
+            return True, query, ""
+            
+        except Exception as e:
+            error_msg = f"Failed to build relations filter query: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return False, "", error_msg
+
+    def get_all_relations(self, graph_name: str, relations_filter=None) -> tuple[bool, dict, str]:
+        """Fetch all relations from the given graph with optional filtering.
+        Args:
+            graph_name: Name of the graph to fetch from
+            relations_filter: Optional List[KnowledgeGraphQueryCriteriaFilter] for filtering (uses first element)
+        Returns:
+            Tuple containing (success: bool, data: dict with 'relations' list, msg: str)
+        """
+        try:
+            filter_element = relations_filter[0] if relations_filter and len(relations_filter) > 0 else None
+            success, query, error_msg = self._get_relations_filter_query(graph_name, filter_element)
+            if not success:
+                return False, {}, error_msg
+            
+            with self.connect_db.engine.connect() as conn:
+                conn.exec_driver_sql(f'SET graph_path = "{graph_name}"')
+                relation_result = conn.exec_driver_sql(query).fetchone()
+                relations_raw = [dict(r) for r in relation_result[0]] if relation_result and relation_result[0] else []
+            
+            filter_msg = ""
+            if filter_element:
+                key = filter_element.key
+                operation = filter_element.operation
+                value = filter_element.value
+                
+                if operation == FilterOperation.RANGE:
+                    filter_msg = f" (filtered by {key} {operation} [{value[0]}, {value[1]}])"
+                else:
+                    filter_msg = f" (filtered by {key} {operation} {value[0]})"
+            
+            msg = f"Found {len(relations_raw)} relations in graph '{graph_name}'{filter_msg}"
+            return True, {"edges": relations_raw}, msg
+        except Exception as e:
+            error_msg = f"Failed to fetch relations from graph '{graph_name}': {str(e)}"
             self.logger.error(error_msg, exc_info=True)
             return False, {}, error_msg
 

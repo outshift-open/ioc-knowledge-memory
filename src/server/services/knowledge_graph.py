@@ -22,6 +22,8 @@ from server.schemas.knowledge_graph import (
     QUERY_TYPE_NEIGHBOUR,
     QUERY_TYPE_CONCEPT,
     QUERY_TYPE_FULL_GRAPH,
+    QUERY_TYPE_CONCEPTS,
+    QUERY_TYPE_RELATIONS,
     ResponseStatus,
 )
 
@@ -132,6 +134,42 @@ class KnowledgeGraphService:
                         message=msg,
                     )
                 records = adapter.convert_models_to_query_response_records([full_graph_data])
+                return KnowledgeGraphQueryResponse(
+                    request_id=request_id,
+                    status=ResponseStatus.SUCCESS,
+                    message=msg,
+                    records=records if records else None,
+                )
+
+            if query_type == QUERY_TYPE_CONCEPTS:
+                self.logger.info(f"Fetching concepts from graph: {graph}")
+                concepts_filter = data.query_criteria.filters
+                success, concepts_data, msg = db.get_all_concepts(graph, concepts_filter)
+                if not success:
+                    return KnowledgeGraphQueryResponse(
+                        request_id=request_id,
+                        status=ResponseStatus.FAILURE,
+                        message=msg,
+                    )
+                records = adapter.convert_models_to_query_response_records([concepts_data])
+                return KnowledgeGraphQueryResponse(
+                    request_id=request_id,
+                    status=ResponseStatus.SUCCESS,
+                    message=msg,
+                    records=records if records else None,
+                )
+
+            if query_type == QUERY_TYPE_RELATIONS:
+                self.logger.info(f"Fetching relations from graph: {graph}")
+                relations_filter = data.query_criteria.filters
+                success, relations_data, msg = db.get_all_relations(graph, relations_filter)
+                if not success:
+                    return KnowledgeGraphQueryResponse(
+                        request_id=request_id,
+                        status=ResponseStatus.FAILURE,
+                        message=msg,
+                    )
+                records = adapter.convert_models_to_query_response_records([relations_data])
                 return KnowledgeGraphQueryResponse(
                     request_id=request_id,
                     status=ResponseStatus.SUCCESS,

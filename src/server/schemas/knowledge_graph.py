@@ -3,10 +3,27 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from enum import Enum
-from typing import Dict, List, Literal, Optional, Any, Annotated
+from typing import Dict, List, Literal, Optional, Any, Annotated, Union, ClassVar
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+class FilterOperation(str, Enum):
+    """Enum for filter operations used in concept queries."""
+    EQSTR = "eqstr"
+    EQ = "eq" 
+    GT = "gt"
+    GTE = "gte"
+    LT = "lt"
+    LTE = "lte"
+    RANGE = "range"
+
+
+class FilterCategory(str, Enum):
+    """Enum for filter categories."""
+    CUSTOM = "custom"
+    DYNAMIC = "dynamic"
 
 
 class ResponseStatus(str, Enum):
@@ -31,8 +48,8 @@ class Concept(BaseModel):
     id: str = Field(..., description="Unique identifier for the concept")
     name: str = Field(..., description="Name of the concept")
     description: Optional[str] = Field(None, description="Detailed description of the concept")
-    attributes: Optional[Dict[str, Any]] = Field(
-        default_factory=dict, description="Additional attributes for the concept"
+    attributes: Optional[Dict[str, Union[str, int, float]]] = Field(
+        default_factory=dict, description="Additional attributes for the concept (strings and numbers only)"
     )
     embeddings: Optional[EmbeddingConfig] = Field(None, description="Embedding configuration for the concept")
     tags: Optional[List[str]] = Field(default_factory=list, description="Optional list of tags for categorization")
@@ -46,8 +63,8 @@ class Relation(BaseModel):
     node_ids: Annotated[
         List[str], Field(..., min_length=2, description="List of node IDs this relation connects (minimum 2)")
     ]
-    attributes: Optional[Dict[str, Any]] = Field(
-        default_factory=dict, description="Additional attributes for the relation"
+    attributes: Optional[Dict[str, Union[str, int, float]]] = Field(
+        default_factory=dict, description="Additional attributes for the relation (strings and numbers only)"
     )
     embeddings: Optional[EmbeddingConfig] = Field(None, description="Embedding configuration for the relation")
 
@@ -347,6 +364,112 @@ QUERY_TYPE_NEIGHBOUR = "neighbour"
 QUERY_TYPE_PATH = "path"
 QUERY_TYPE_CONCEPT = "concept"
 QUERY_TYPE_FULL_GRAPH = "full_graph"
+QUERY_TYPE_CONCEPTS = "concepts"
+QUERY_TYPE_RELATIONS = "relations"
+
+class KnowledgeGraphQueryCriteriaFilter(BaseModel):
+    """Generic key-operation-value filter for concept queries."""
+    
+    # Define allowed values as class constants
+    CATEGORY_ALLOW: ClassVar[List[str]] = [e.value for e in FilterCategory]
+    OPERATION_ALLOW: ClassVar[List[str]] = [e.value for e in FilterOperation]
+    CONCEPTS_CUSTOM_KEY_ALLOW: ClassVar[List[str]] = ["id", "name", "relations_cnt"]
+    RELATIONS_CUSTOM_KEY_ALLOW: ClassVar[List[str]] = ["id", "relation"]
+    
+    # Define specific key constants
+    KEY_RELATIONS_CNT: ClassVar[str] = "relations_cnt"
+    KEY_ID: ClassVar[str] = "id"
+    KEY_NAME: ClassVar[str] = "name"
+    KEY_RELATION: ClassVar[str] = "relation"
+    
+    category: FilterCategory = Field(..., description=f"Type of filter key ({', '.join(CATEGORY_ALLOW)})")
+    key: str = Field(..., description=f"Key to filter on (custom: {', '.join(CONCEPTS_CUSTOM_KEY_ALLOW)}; dynamic: any property)")
+    operation: FilterOperation = Field(..., description=f"Comparison operation ({', '.join(OPERATION_ALLOW)})")
+    value: List[Union[int, str, float]] = Field(..., min_length=1, description="Value(s) to compare against")
+    
+    # Get query_type from outer context
+    def get_query_type(self) -> Optional[str]:
+        return getattr(self, '_query_type', None)
+
+    @field_validator("value", mode="after")
+    @classmethod
+    def validate_value(cls, v: List[Union[int, str, float]], info) -> List[Union[int, str, float]]:
+        """Validate value array based on operation."""
+        if not v:
+            raise ValueError("Value array cannot be empty")
+        
+        # Get operation from the model context
+        operation = info.data.get("operation")
+        
+        # Validate value types based on operation
+        if operation == FilterOperation.EQSTR:
+            # eqstr operation should only have string values
+            if not all(isinstance(x, str) for x in v):
+                raise ValueError("eqstr operation requires string values only")
+            if len(v) != 1:
+                raise ValueError("eqstr operation requires exactly 1 value")
+        else:
+            # All other operations should have non-string values (numeric)
+            if any(isinstance(x, str) for x in v):
+                raise ValueError(f"Operation '{operation}' requires non-string values (numeric only)")
+            
+            if operation == FilterOperation.RANGE:
+                if len(v) != 2:
+                    raise ValueError("Range operation requires exactly 2 values")
+                # Ensure min <= max for numeric ranges
+                if v[0] > v[1]:
+                    raise ValueError("Range: first value (min) must be <= second value (max)")
+            else:
+                if len(v) != 1:
+                    raise ValueError(f"Operation '{operation}' requires exactly 1 value")
+        
+        return v
+    
+    @field_validator("category", mode="after")
+    @classmethod
+    def validate_category(cls, v: str) -> str:
+        """Validate category is in allowed list."""
+        if v not in cls.CATEGORY_ALLOW:
+            raise ValueError(f"Category '{v}' not allowed. Must be one of: {cls.CATEGORY_ALLOW}")
+        return v
+    
+    @field_validator("operation", mode="after")
+    @classmethod
+    def validate_operation(cls, v: str) -> str:
+        """Validate operation is in allowed list."""
+        if v not in cls.OPERATION_ALLOW:
+            raise ValueError(f"Operation '{v}' not allowed. Must be one of: {cls.OPERATION_ALLOW}")
+        return v
+        
+    @model_validator(mode="after")
+    def validate_custom_key_allowlist(self) -> "KnowledgeGraphQueryCriteriaFilter":
+        """Validate that custom category keys are in the allowed list."""
+        query_type = self.get_query_type()
+
+        if self.category == FilterCategory.CUSTOM and query_type == QUERY_TYPE_CONCEPTS and self.key not in self.CONCEPTS_CUSTOM_KEY_ALLOW:
+            raise ValueError(f"Custom category key '{self.key}' not allowed. Must be one of: {self.CONCEPTS_CUSTOM_KEY_ALLOW}")
+        if self.category == FilterCategory.CUSTOM and query_type == QUERY_TYPE_RELATIONS and self.key not in self.RELATIONS_CUSTOM_KEY_ALLOW:
+            raise ValueError(f"Custom category key '{self.key}' not allowed. Must be one of: {self.RELATIONS_CUSTOM_KEY_ALLOW}")
+        
+        return self
+    
+    @model_validator(mode="after")
+    def validate_operation_for_custom_keys(self) -> "KnowledgeGraphQueryCriteriaFilter":
+        """Validate operations based on custom key types."""
+        if self.category == FilterCategory.CUSTOM:
+            # String-only keys: id, name, relation - only EQSTR allowed
+            string_keys = [self.KEY_ID, self.KEY_NAME, self.KEY_RELATION]
+            # Numeric-only keys: relations_cnt - EQSTR not allowed
+            numeric_keys = [self.KEY_RELATIONS_CNT]
+            
+            if self.key in string_keys:
+                if self.operation != FilterOperation.EQSTR:
+                    raise ValueError(f"Custom key '{self.key}' only supports EQSTR operation, got '{self.operation}'")
+            elif self.key in numeric_keys:
+                if self.operation == FilterOperation.EQSTR:
+                    raise ValueError(f"Custom key '{self.key}' does not support EQSTR operation, use numeric operations (eq, gt, gte, lt, lte, range)")
+        
+        return self
 
 
 class KnowledgeGraphQueryCriteria(BaseModel):
@@ -357,6 +480,31 @@ class KnowledgeGraphQueryCriteria(BaseModel):
         default=True, description="Whether to use directed relationships in path queries"
     )
     query_type: str = Field(default=QUERY_TYPE_NEIGHBOUR, description="Type of query to execute")
+    filters: Optional[List[KnowledgeGraphQueryCriteriaFilter]] = Field(
+        default=None, description="List of structured filters for filtering concepts and relations"
+    )
+    
+    @model_validator(mode="after")
+    def validate_filter_count(self) -> "KnowledgeGraphQueryCriteria":
+        """Validate that filters contains only a single filter entry."""
+        if self.filters is not None:
+            if len(self.filters) == 0:
+                raise ValueError("Unsupported: filters list cannot be empty")
+            elif len(self.filters) > 1:
+                raise ValueError("Unsupported: only a single KnowledgeGraphQueryCriteriaFilter entry is allowed in the list")
+        
+        return self
+    
+    @model_validator(mode="after") 
+    def validate_filter_with_query_type(self) -> "KnowledgeGraphQueryCriteria":
+        """Pass query_type context to all filters for validation."""
+        if self.filters is not None and len(self.filters) > 0:
+            # Add query_type context to all filters for validation
+            for filter_obj in self.filters:
+                # Store query_type in a private attribute for each filter to access
+                filter_obj._query_type = self.query_type
+        
+        return self
 
 
 class KnowledgeGraphQueryRequest(BaseModel):
@@ -398,6 +546,12 @@ class KnowledgeGraphQueryRequest(BaseModel):
         query_type = self.query_criteria.query_type if self.query_criteria else QUERY_TYPE_NEIGHBOUR
 
         if query_type == QUERY_TYPE_FULL_GRAPH:
+            return self
+        
+        if query_type == QUERY_TYPE_CONCEPTS:
+            return self
+            
+        if query_type == QUERY_TYPE_RELATIONS:
             return self
 
         if not self.records or "concepts" not in self.records:
