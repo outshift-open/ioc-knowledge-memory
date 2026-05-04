@@ -246,14 +246,9 @@ jobs:
       # Only needed if with:ecr-enabled or with:gar-enabled is true below
       vault-approle-role-id: ${{ secrets.VAULT_APPROLE_ROLE_ID }}
       vault-approle-secret-id: ${{ secrets.VAULT_APPROLE_SECRET_ID }}
-      # These two secrets are ONLY needed when you are trying to access GAR/GCR in a venture specific project (e.g. 'k8sec-dev' for example).
-      # The values should be consistent with the vault namespace (set by 'VAULT_VENTURE_NAMESPACE' var)
-      # vault-venture-approle-role-id: ${{secrets.VAULT_SECURECN_APPROLE_ROLE_ID}}
-      # vault-venture-approle-secret-id: ${{secrets.VAULT_SECURECN_APPROLE_SECRET_ID}}
-      #######
-      ghcr-username: ${{ secrets.GHCR_USERNAME }}
-      ghcr-token: ${{ secrets.GHCR_TOKEN }}
-      ghcr-org-token: ${{ secrets.GHCR_TOKEN }}
+      github-app-id: ${{ secrets.GHA_APP_ID }}
+      github-app-private-key: ${{ secrets.GHA_APP_PRIVATE_KEY }}
+      caller-github-token: ${{ secrets.GITHUB_TOKEN }}
 
     with:
       ### REQUIRED
