@@ -252,7 +252,7 @@ jobs:
 
     with:
       ### REQUIRED
-      runner-group: ${{ vars.DEFAULT_ARC_RUNNERS }}
+      runner-group: arc-runner-set
       ### Docker image name
       image-name: "${{ github.event.repository.name }}"
 
@@ -265,8 +265,8 @@ jobs:
       ### REQUIRED
       ### ENABLE ONE OR BOTH REGISTRIES
       ### tell docker where to push. Only push on main branch.
-      ecr-enabled: ${{ github.ref == 'refs/heads/main' }}
-      ghcr-enabled: ${{ github.ref == 'refs/heads/main' }}
+      ecr-enabled: true
+      ghcr-enabled: true
       ghcr-org-registry: ${{ vars.GHCR_REGISTRY }}
 
   ################################# Corona & blackduck ###########################
