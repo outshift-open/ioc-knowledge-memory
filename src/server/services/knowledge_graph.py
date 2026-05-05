@@ -26,6 +26,7 @@ from server.schemas.knowledge_graph import (
     QUERY_TYPE_RELATIONS,
     ResponseStatus,
 )
+from server.database.graph_db.agensgraph.models.node import Node
 
 
 class KnowledgeGraphService:
@@ -45,6 +46,31 @@ class KnowledgeGraphService:
             nodes, edges = adapter.convert_to_models(data.model_dump())
 
             db = GraphDB()
+
+            # For incremental updates, relations may reference nodes already in the graph.
+            # Verify those external node IDs actually exist before writing.
+            if data.incremental_update and data.records:
+                concept_ids_in_batch = {c.get("id") for c in (data.records.get("concepts") or [])}
+                external_node_ids = {
+                    node_id
+                    for relation in (data.records.get("relations") or [])
+                    for node_id in (relation.get("node_ids") or [])
+                    if node_id not in concept_ids_in_batch
+                }
+                if external_node_ids:
+                    not_found = [
+                        node_id for node_id in external_node_ids
+                        if not db.get_node(graph=graph, node=Node(id=node_id, labels=["Concept"]))
+                    ]
+                    if not_found:
+                        self.logger.error(f"Node {not_found} not found in graph")
+
+                        return KnowledgeGraphStoreResponse(
+                            request_id=request_id,
+                            status=ResponseStatus.NOT_FOUND,
+                            message=f"Relations reference node IDs not found in graph: {', '.join(sorted(not_found))}",
+                        )
+
             save_result, msg = db.save(graph=graph, nodes=nodes, edges=edges, force_replace=data.force_replace)
 
             if save_result:

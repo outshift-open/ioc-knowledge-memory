@@ -33,6 +33,7 @@ internal_router = APIRouter()
         400: {
             "description": "Bad request - validation error (missing required fields, invalid data format, or business logic validation failure)"
         },
+        404: {"description": "Not found - referenced node IDs do not exist in the graph (incremental update only)"},
         500: {"description": "Internal server error - unexpected system failure"},
     },
 )
@@ -49,6 +50,8 @@ def create_graph_store(data: KnowledgeGraphStoreRequest):
         status_code = status.HTTP_201_CREATED
     elif response.status == ResponseStatus.VALIDATION_ERROR:
         status_code = status.HTTP_400_BAD_REQUEST
+    elif response.status == ResponseStatus.NOT_FOUND:
+        status_code = status.HTTP_404_NOT_FOUND
     else:
         status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
 

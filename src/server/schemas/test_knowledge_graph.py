@@ -232,16 +232,16 @@ class TestKnowledgeGraphStoreRequest:
         assert len(request.records["concepts"]) == 2
         assert len(request.records["relations"]) == 1
 
-    def test_store_request_skip_node_id_check_defaults_false(self):
-        """Test that skip_node_id_check defaults to False."""
+    def test_store_request_incremental_update_defaults_false(self):
+        """Test that incremental_update defaults to False."""
         request = KnowledgeGraphStoreRequest(mas_id="test-mas")
-        assert request.skip_node_id_check is False
+        assert request.incremental_update is False
 
-    def test_store_request_skip_node_id_check_allows_external_node_reference(self):
-        """With skip_node_id_check=True, relations may reference nodes not in this batch."""
+    def test_store_request_incremental_update_allows_external_node_reference(self):
+        """With incremental_update=True, relations may reference nodes not in this batch."""
         request = KnowledgeGraphStoreRequest(
             mas_id="test-mas",
-            skip_node_id_check=True,
+            incremental_update=True,
             records={
                 "concepts": [{"id": "new-concept", "name": "CoDiN"}],
                 "relations": [
@@ -254,15 +254,15 @@ class TestKnowledgeGraphStoreRequest:
                 ],
             },
         )
-        assert request.skip_node_id_check is True
+        assert request.incremental_update is True
         assert len(request.records["concepts"]) == 1
         assert len(request.records["relations"]) == 1
 
-    def test_store_request_skip_node_id_check_allows_relations_only(self):
-        """With skip_node_id_check=True, sending only relations (no new concepts) is valid."""
+    def test_store_request_incremental_update_allows_relations_only(self):
+        """With incremental_update=True, sending only relations (no new concepts) is valid."""
         request = KnowledgeGraphStoreRequest(
             mas_id="test-mas",
-            skip_node_id_check=True,
+            incremental_update=True,
             records={
                 "concepts": [],
                 "relations": [

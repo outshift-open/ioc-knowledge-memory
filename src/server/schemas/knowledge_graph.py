@@ -103,10 +103,9 @@ class KnowledgeGraphStoreRequest(BaseModel):
     )
     wksp_id: Optional[str] = Field(default=None, min_length=1, description="ID for the Multi-Agent System Workspace")
     force_replace: bool = Field(False, description="Force replace existing nodes and edges")
-    skip_node_id_check: bool = Field(
+    incremental_update: bool = Field(
         False,
-        description="Skip the cross-request node-id validation. Set to true for incremental updates "
-                    "where relations may reference nodes already present in the graph.",
+        description="Indicates an incremental update where relations may reference nodes already present in the graph.",
     )
 
     model_config = ConfigDict(
@@ -189,7 +188,7 @@ class KnowledgeGraphStoreRequest(BaseModel):
             # to avoid connecting edges between nodes with
             # different metadata (eg wksp_id, mas_id, memory_type).
             # Skipped for incremental updates where relations may reference existing graph nodes.
-            if not self.skip_node_id_check:
+            if not self.incremental_update:
                 for node_id in node_ids:
                     if node_id not in concept_ids:
                         raise ValueError(
