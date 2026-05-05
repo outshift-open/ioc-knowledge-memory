@@ -232,6 +232,51 @@ class TestKnowledgeGraphStoreRequest:
         assert len(request.records["concepts"]) == 2
         assert len(request.records["relations"]) == 1
 
+    def test_store_request_skip_node_id_check_defaults_false(self):
+        """Test that skip_node_id_check defaults to False."""
+        request = KnowledgeGraphStoreRequest(mas_id="test-mas")
+        assert request.skip_node_id_check is False
+
+    def test_store_request_skip_node_id_check_allows_external_node_reference(self):
+        """With skip_node_id_check=True, relations may reference nodes not in this batch."""
+        request = KnowledgeGraphStoreRequest(
+            mas_id="test-mas",
+            skip_node_id_check=True,
+            records={
+                "concepts": [{"id": "new-concept", "name": "CoDiN"}],
+                "relations": [
+                    {
+                        "id": "r1",
+                        "relation": "CoDi",
+                        # "existing-anchor" is already in the graph — not in concepts above.
+                        "node_ids": ["existing-anchor", "new-concept"],
+                    }
+                ],
+            },
+        )
+        assert request.skip_node_id_check is True
+        assert len(request.records["concepts"]) == 1
+        assert len(request.records["relations"]) == 1
+
+    def test_store_request_skip_node_id_check_allows_relations_only(self):
+        """With skip_node_id_check=True, sending only relations (no new concepts) is valid."""
+        request = KnowledgeGraphStoreRequest(
+            mas_id="test-mas",
+            skip_node_id_check=True,
+            records={
+                "concepts": [],
+                "relations": [
+                    {
+                        "id": "r1",
+                        "relation": "INTEGRATES_WITH",
+                        "node_ids": ["existing-node-a", "existing-node-b"],
+                    }
+                ],
+            },
+        )
+        assert len(request.records["concepts"]) == 0
+        assert len(request.records["relations"]) == 1
+
 
 class TestKnowledgeGraphStoreResponse:
     """Test suite for KnowledgeGraphStoreResponse model."""

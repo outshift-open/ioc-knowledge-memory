@@ -103,6 +103,11 @@ class KnowledgeGraphStoreRequest(BaseModel):
     )
     wksp_id: Optional[str] = Field(default=None, min_length=1, description="ID for the Multi-Agent System Workspace")
     force_replace: bool = Field(False, description="Force replace existing nodes and edges")
+    skip_node_id_check: bool = Field(
+        False,
+        description="Skip the cross-request node-id validation. Set to true for incremental updates "
+                    "where relations may reference nodes already present in the graph.",
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -182,14 +187,16 @@ class KnowledgeGraphStoreRequest(BaseModel):
 
             # validate that edges only contain nodes specified in this requests nodes
             # to avoid connecting edges between nodes with
-            # different metadata (eg wksp_id, mas_id, memory_type)
-            for node_id in node_ids:
-                if node_id not in concept_ids:
-                    raise ValueError(
-                        f"Relation {relation.get('id', 'unknown')} references non-existent node ID '{node_id}'. "
-                        f"Node IDs must be present in the 'concepts' list. "
-                        f"Available concept IDs: {', '.join(map(str, sorted(concept_ids))) or 'None'}"
-                    )
+            # different metadata (eg wksp_id, mas_id, memory_type).
+            # Skipped for incremental updates where relations may reference existing graph nodes.
+            if not self.skip_node_id_check:
+                for node_id in node_ids:
+                    if node_id not in concept_ids:
+                        raise ValueError(
+                            f"Relation {relation.get('id', 'unknown')} references non-existent node ID '{node_id}'. "
+                            f"Node IDs must be present in the 'concepts' list. "
+                            f"Available concept IDs: {', '.join(map(str, sorted(concept_ids))) or 'None'}"
+                        )
 
         return self
 
