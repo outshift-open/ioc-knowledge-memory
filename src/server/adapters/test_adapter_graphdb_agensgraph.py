@@ -326,3 +326,358 @@ class TestAdapterGraphdbAgensgraph:
 
         assert properties["embedding_vector"] == [1.0, 2.0, 3.0]
         assert properties["embedding_model"] == "test_model"
+
+    def test_process_internal_attributes_basic(self, adapter):
+        """Test _process_internal_attributes method with basic input."""
+        internal_attributes = {
+            "owner": "550e8400-e29b-41d4-a716-446655440000",
+            "attributes": {"category": "Technology", "rate": 19.5}
+        }
+        
+        result = adapter._process_internal_attributes(internal_attributes)
+        
+        expected = {
+            "550e8400-e29b-41d4-a716-446655440000$category": "Technology",
+            "550e8400-e29b-41d4-a716-446655440000$rate": 19.5
+        }
+        assert result == expected
+
+    def test_process_internal_attributes_empty_owner(self, adapter):
+        """Test _process_internal_attributes method with empty owner."""
+        internal_attributes = {
+            "owner": "",
+            "attributes": {"category": "Technology"}
+        }
+        
+        result = adapter._process_internal_attributes(internal_attributes)
+        assert result == {}
+
+    def test_process_internal_attributes_no_attributes(self, adapter):
+        """Test _process_internal_attributes method with no attributes."""
+        internal_attributes = {
+            "owner": "550e8400-e29b-41d4-a716-446655440000",
+            "attributes": {}
+        }
+        
+        result = adapter._process_internal_attributes(internal_attributes)
+        assert result == {}
+
+    def test_process_internal_attributes_empty_input(self, adapter):
+        """Test _process_internal_attributes method with empty input."""
+        result = adapter._process_internal_attributes({})
+        assert result == {}
+
+    def test_process_internal_attributes_none_input(self, adapter):
+        """Test _process_internal_attributes method with None input."""
+        result = adapter._process_internal_attributes(None)
+        assert result == {}
+
+    def test_extract_internal_attributes_from_properties_basic(self, adapter):
+        """Test _extract_internal_attributes_from_properties method with basic input."""
+        properties = {
+            "name": "Test Node",
+            "550e8400-e29b-41d4-a716-446655440000$category": "Technology",
+            "550e8400-e29b-41d4-a716-446655440000$rate": 19.5,
+            "regular_attribute": "value"
+        }
+        
+        result = adapter._extract_internal_attributes_from_properties(properties)
+        
+        assert result is not None
+        assert len(result) == 1
+        assert result[0]["owner"] == "550e8400-e29b-41d4-a716-446655440000"
+        assert result[0]["attributes"] == {"category": "Technology", "rate": 19.5}
+
+    def test_extract_internal_attributes_from_properties_multiple_owners(self, adapter):
+        """Test _extract_internal_attributes_from_properties method with multiple owners."""
+        properties = {
+            "name": "Test Node",
+            "550e8400-e29b-41d4-a716-446655440000$category": "Technology",
+            "550e8400-e29b-41d4-a716-446655440000$rate": 19.5,
+            "123e4567-e89b-12d3-a456-426614174000$session_time": 1672531207,
+            "123e4567-e89b-12d3-a456-426614174000$priority": "high",
+            "regular_attribute": "value"
+        }
+        
+        result = adapter._extract_internal_attributes_from_properties(properties)
+        
+        assert result is not None
+        assert len(result) == 2
+        
+        # Sort by owner for consistent testing
+        result_sorted = sorted(result, key=lambda x: x["owner"])
+        
+        assert result_sorted[0]["owner"] == "123e4567-e89b-12d3-a456-426614174000"
+        assert result_sorted[0]["attributes"] == {"session_time": 1672531207, "priority": "high"}
+        
+        assert result_sorted[1]["owner"] == "550e8400-e29b-41d4-a716-446655440000"
+        assert result_sorted[1]["attributes"] == {"category": "Technology", "rate": 19.5}
+
+    def test_extract_internal_attributes_from_properties_no_internal_attrs(self, adapter):
+        """Test _extract_internal_attributes_from_properties method with no internal attributes."""
+        properties = {
+            "name": "Test Node",
+            "regular_attribute": "value",
+            "another_attr": 42
+        }
+        
+        result = adapter._extract_internal_attributes_from_properties(properties)
+        assert result is None
+
+    def test_extract_internal_attributes_from_properties_empty_properties(self, adapter):
+        """Test _extract_internal_attributes_from_properties method with empty properties."""
+        result = adapter._extract_internal_attributes_from_properties({})
+        assert result is None
+
+    def test_convert_to_models_with_internal_attributes_concepts(self, adapter):
+        """Test convert_to_models with concept data containing internal attributes."""
+        test_data = {
+            "mas_id": "test_mas",
+            "wksp_id": "test_wksp",
+            "memory_type": "test_memory",
+            "records": {
+                "concepts": [
+                    {
+                        "id": "concept1",
+                        "name": "Test Concept",
+                        "description": "A test concept",
+                        "attributes": {"key1": "value1"},
+                        "internal_attributes": [
+                            {
+                                "owner": "550e8400-e29b-41d4-a716-446655440000",
+                                "attributes": {"category": "Technology", "rate": 19.5}
+                            }
+                        ]
+                    }
+                ]
+            },
+        }
+
+        nodes, edges = adapter.convert_to_models(test_data)
+
+        assert len(nodes) == 1
+        node = nodes[0]
+        
+        # Check that internal attributes are converted to prefixed property keys
+        assert "550e8400-e29b-41d4-a716-446655440000$category" in node.properties
+        assert "550e8400-e29b-41d4-a716-446655440000$rate" in node.properties
+        assert node.properties["550e8400-e29b-41d4-a716-446655440000$category"] == "Technology"
+        assert node.properties["550e8400-e29b-41d4-a716-446655440000$rate"] == 19.5
+        
+        # Check regular attributes are still present
+        assert node.properties["key1"] == "value1"
+
+    def test_convert_to_models_with_internal_attributes_relations(self, adapter):
+        """Test convert_to_models with relation data containing internal attributes."""
+        test_data = {
+            "mas_id": "test_mas",
+            "wksp_id": "test_wksp", 
+            "memory_type": "test_memory",
+            "records": {
+                "relations": [
+                    {
+                        "id": "rel1",
+                        "node_ids": ["node1", "node2"],
+                        "relation": "RELATED_TO",
+                        "attributes": {"strength": 0.8},
+                        "internal_attributes": [
+                            {
+                                "owner": "123e4567-e89b-12d3-a456-426614174000",
+                                "attributes": {"session_time": 1672531207, "priority": "high"}
+                            }
+                        ]
+                    }
+                ]
+            },
+        }
+
+        nodes, edges = adapter.convert_to_models(test_data)
+
+        assert len(edges) == 1
+        edge = edges[0]
+        
+        # Check that internal attributes are converted to prefixed property keys
+        assert "123e4567-e89b-12d3-a456-426614174000$session_time" in edge.properties
+        assert "123e4567-e89b-12d3-a456-426614174000$priority" in edge.properties
+        assert edge.properties["123e4567-e89b-12d3-a456-426614174000$session_time"] == 1672531207
+        assert edge.properties["123e4567-e89b-12d3-a456-426614174000$priority"] == "high"
+        
+        # Check regular attributes are still present
+        assert edge.properties["strength"] == 0.8
+
+    def test_convert_to_models_with_multiple_internal_attributes(self, adapter):
+        """Test convert_to_models with multiple internal attribute owners."""
+        test_data = {
+            "mas_id": "test_mas",
+            "records": {
+                "concepts": [
+                    {
+                        "id": "concept1",
+                        "name": "Test Concept",
+                        "internal_attributes": [
+                            {
+                                "owner": "550e8400-e29b-41d4-a716-446655440000",
+                                "attributes": {"category": "Technology"}
+                            },
+                            {
+                                "owner": "123e4567-e89b-12d3-a456-426614174000", 
+                                "attributes": {"session_time": 1672531207}
+                            }
+                        ]
+                    }
+                ]
+            },
+        }
+
+        nodes, edges = adapter.convert_to_models(test_data)
+
+        assert len(nodes) == 1
+        node = nodes[0]
+        
+        # Check both owners' attributes are present
+        assert "550e8400-e29b-41d4-a716-446655440000$category" in node.properties
+        assert "123e4567-e89b-12d3-a456-426614174000$session_time" in node.properties
+        assert node.properties["550e8400-e29b-41d4-a716-446655440000$category"] == "Technology"
+        assert node.properties["123e4567-e89b-12d3-a456-426614174000$session_time"] == 1672531207
+
+    def test_convert_models_to_query_response_records_with_internal_attributes(self, adapter):
+        """Test convert_models_to_query_response_records extracts internal attributes correctly."""
+        test_data = [
+            {
+                "nodes": [
+                    {
+                        "id": "1",
+                        "name": "Test Node",
+                        "550e8400-e29b-41d4-a716-446655440000$category": "Technology",
+                        "550e8400-e29b-41d4-a716-446655440000$rate": 19.5,
+                        "regular_attr": "value"
+                    }
+                ],
+                "edges": [
+                    {
+                        "id": "r1",
+                        "relation": "RELATED_TO",
+                        "node_ids": ["1", "2"],
+                        "123e4567-e89b-12d3-a456-426614174000$session_time": 1672531207,
+                        "123e4567-e89b-12d3-a456-426614174000$priority": "high",
+                        "strength": 0.8
+                    }
+                ]
+            }
+        ]
+
+        result = adapter.convert_models_to_query_response_records(test_data)
+        
+        assert len(result) == 1
+        record = result[0]
+        
+        # Check concept internal attributes
+        assert len(record.concepts) == 1
+        concept = record.concepts[0]
+        assert concept.internal_attributes is not None
+        assert len(concept.internal_attributes) == 1
+        assert concept.internal_attributes[0].owner == "550e8400-e29b-41d4-a716-446655440000"
+        assert concept.internal_attributes[0].attributes == {"category": "Technology", "rate": 19.5}
+        assert concept.attributes == {"regular_attr": "value"}
+        
+        # Check relation internal attributes
+        assert len(record.relationships) == 1
+        relation = record.relationships[0]
+        assert relation.internal_attributes is not None
+        assert len(relation.internal_attributes) == 1
+        assert relation.internal_attributes[0].owner == "123e4567-e89b-12d3-a456-426614174000"
+        assert relation.internal_attributes[0].attributes == {"session_time": 1672531207, "priority": "high"}
+        assert relation.attributes == {"strength": 0.8}
+
+    def test_convert_models_to_query_response_records_multiple_internal_owners(self, adapter):
+        """Test convert_models_to_query_response_records with multiple internal attribute owners."""
+        test_data = [
+            {
+                "nodes": [
+                    {
+                        "id": "1",
+                        "name": "Test Node",
+                        "550e8400-e29b-41d4-a716-446655440000$category": "Technology",
+                        "123e4567-e89b-12d3-a456-426614174000$session_time": 1672531207,
+                        "123e4567-e89b-12d3-a456-426614174000$priority": "high"
+                    }
+                ]
+            }
+        ]
+
+        result = adapter.convert_models_to_query_response_records(test_data)
+        
+        concept = result[0].concepts[0]
+        assert concept.internal_attributes is not None
+        assert len(concept.internal_attributes) == 2
+        
+        # Sort by owner for consistent testing
+        internal_attrs_sorted = sorted(concept.internal_attributes, key=lambda x: x.owner)
+        
+        assert internal_attrs_sorted[0].owner == "123e4567-e89b-12d3-a456-426614174000"
+        assert internal_attrs_sorted[0].attributes == {"session_time": 1672531207, "priority": "high"}
+        
+        assert internal_attrs_sorted[1].owner == "550e8400-e29b-41d4-a716-446655440000"
+        assert internal_attrs_sorted[1].attributes == {"category": "Technology"}
+
+    def test_convert_models_to_query_response_records_no_internal_attributes(self, adapter):
+        """Test convert_models_to_query_response_records with no internal attributes."""
+        test_data = [
+            {
+                "nodes": [
+                    {
+                        "id": "1",
+                        "name": "Test Node",
+                        "regular_attr": "value"
+                    }
+                ],
+                "edges": [
+                    {
+                        "id": "r1",
+                        "relation": "RELATED_TO",
+                        "node_ids": ["1", "2"],
+                        "strength": 0.8
+                    }
+                ]
+            }
+        ]
+
+        result = adapter.convert_models_to_query_response_records(test_data)
+        
+        concept = result[0].concepts[0]
+        relation = result[0].relationships[0]
+        
+        # Should be None when no internal attributes
+        assert concept.internal_attributes is None
+        assert relation.internal_attributes is None
+        
+        # Regular attributes should still be present
+        assert concept.attributes == {"regular_attr": "value"}
+        assert relation.attributes == {"strength": 0.8}
+
+    def test_property_key_separator_exclusion_in_attributes(self, adapter):
+        """Test that properties with separator are excluded from regular attributes."""
+        test_data = [
+            {
+                "nodes": [
+                    {
+                        "id": "1",
+                        "name": "Test Node",
+                        "550e8400-e29b-41d4-a716-446655440000$category": "Technology",  # Should be excluded
+                        "regular_attr": "value",  # Should be included
+                        "123e4567-e89b-12d3-a456-426614174000$key": "should_be_excluded"  # Should be excluded
+                    }
+                ]
+            }
+        ]
+
+        result = adapter.convert_models_to_query_response_records(test_data)
+        
+        concept = result[0].concepts[0]
+        
+        # Only regular attributes without separator should be in attributes
+        assert concept.attributes == {"regular_attr": "value"}
+        
+        # Internal attributes should be extracted separately
+        assert concept.internal_attributes is not None
+        assert len(concept.internal_attributes) == 2  # Two different owners

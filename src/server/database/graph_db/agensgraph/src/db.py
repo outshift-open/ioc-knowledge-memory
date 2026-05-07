@@ -10,7 +10,8 @@ import agensgraph
 
 from server.database.connection import ConnectDB
 from server.schemas.knowledge_vector import EMBEDDING_VECTOR_SIZE
-from server.schemas.knowledge_graph import KnowledgeGraphQueryCriteriaFilter, FilterOperation
+from server.schemas.knowledge_graph import KnowledgeGraphQueryCriteriaFilter, FilterOperation, FilterCategory, DEFAULT_PROPERTY_KEY_SEPARATOR
+from server.schemas.knowledge_graph_utils import prefix_field_with_separator, build_internal_attribute_key
 
 
 def quote_relation_type(relation_type: str) -> str:
@@ -37,6 +38,36 @@ def unquote_relation_type(quoted_relation: str) -> str:
     if quoted_relation.startswith('"') and quoted_relation.endswith('"'):
         return quoted_relation[1:-1]
     return quoted_relation
+
+
+def quote_property_key(property_key: str) -> str:
+    """Quote property key for Cypher queries to handle reserved keywords and special characters.
+    
+    Args:
+        property_key: The property key string
+        
+    Returns:
+        Quoted property key string
+        
+    Examples:
+        quote_property_key("uuid_123e4567_e89b_12d3_a456_426614174000$category") -> '"uuid_123e4567_e89b_12d3_a456_426614174000$category"'
+        quote_property_key("name") -> '"name"'
+    """
+    return f'"{property_key}"'
+
+
+def unquote_property_key(quoted_key: str) -> str:
+    """Remove quotes from property key for comparison and processing.
+    
+    Args:
+        quoted_key: The quoted property key string
+        
+    Returns:
+        Unquoted property key string
+    """
+    if quoted_key.startswith('"') and quoted_key.endswith('"'):
+        return quoted_key[1:-1]
+    return quoted_key
 
 
 class GraphDB:
@@ -641,6 +672,7 @@ class GraphDB:
             key = concepts_filter.key
             operation = concepts_filter.operation
             value = concepts_filter.value
+            category = concepts_filter.category
             
             # Validate operation against schema constants
             if operation not in KnowledgeGraphQueryCriteriaFilter.OPERATION_ALLOW:
@@ -653,7 +685,15 @@ class GraphDB:
                     target_field = "relation_count"
                 case _:
                     base_query = "MATCH (n)"
-                    target_field = f"n.{key}"
+                    
+                    # Handle internal category filters
+                    if category == FilterCategory.INTERNAL:
+                        success, prefixed_key, error_msg = build_internal_attribute_key(concepts_filter.owner, key)
+                        if not success:
+                            return False, "", error_msg
+                        target_field = f"n.{quote_property_key(prefixed_key)}"
+                    else:
+                        target_field = f"n.{quote_property_key(key)}"
             
             # Build where clause based on operation
             match operation:
@@ -795,6 +835,7 @@ class GraphDB:
             key = relations_filter.key
             operation = relations_filter.operation
             value = relations_filter.value
+            category = relations_filter.category
             
             # Validate operation against schema constants
             if operation not in KnowledgeGraphQueryCriteriaFilter.OPERATION_ALLOW:
@@ -809,7 +850,15 @@ class GraphDB:
                     target_field = "relation_type"  # Special case - no actual field needed
                 case _:
                     base_query = "MATCH ()-[r]->()"
-                    target_field = f"r.{key}"
+                    
+                    # Handle internal category filters
+                    if category == FilterCategory.INTERNAL:
+                        success, prefixed_key, error_msg = build_internal_attribute_key(relations_filter.owner, key)
+                        if not success:
+                            return False, "", error_msg
+                        target_field = f"r.{quote_property_key(prefixed_key)}"
+                    else:
+                        target_field = f"r.{quote_property_key(key)}"
             
             # Build where clause based on operation
             match operation:

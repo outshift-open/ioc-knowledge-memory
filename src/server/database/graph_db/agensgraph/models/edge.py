@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Any
 
-from server.database.graph_db.agensgraph.src.db import quote_relation_type
+from server.database.graph_db.agensgraph.src.db import quote_relation_type, quote_property_key
 
 
 @dataclass
@@ -45,8 +45,8 @@ class Edge:
         # relation type as uppercase with underscores
         if not self.relation:
             raise ValueError("Relation type must not be empty")
-        if not re.match(r"^[A-Z0-9_]+$", self.relation):
-            raise ValueError("Relation type must be uppercase with underscores")
+        # if not re.match(r"^[A-Z0-9_]+$", self.relation):
+        #     raise ValueError("Relation type must be uppercase with underscores")
         if self.direction not in ("->", "<-", "--"):
             raise ValueError("Direction must be one of: '->', '<-', '--'")
         self._validate_properties()
@@ -91,8 +91,8 @@ class Edge:
             else:
                 properties[key] = value
 
-        # Build property string with %s placeholders
-        props = ", ".join([f"{k}: %s" for k in properties.keys()])
+        # Build property string with %s placeholders, quoting keys for safety
+        props = ", ".join([f"{quote_property_key(k)}: %s" for k in properties.keys()])
 
         # Determine the relationship pattern based on direction
         # Quote the relation type to handle reserved Cypher keywords (e.g. REFERENCES)

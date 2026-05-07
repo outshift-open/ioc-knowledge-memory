@@ -203,6 +203,7 @@ class KnowledgeGraphService:
                     records=records if records else None,
                 )
 
+            # This is not required for full graph or filter queries
             nodes = adapter.convert_query_to_models(data.model_dump())
 
             # Validate if nodes exist

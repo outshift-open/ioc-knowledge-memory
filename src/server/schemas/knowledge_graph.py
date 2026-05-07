@@ -7,6 +7,10 @@ from typing import Dict, List, Literal, Optional, Any, Annotated, Union, ClassVa
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from server.schemas.knowledge_graph_utils import validate_uuid_field
+
+# Constants
+DEFAULT_PROPERTY_KEY_SEPARATOR = "$"
 
 
 class FilterOperation(str, Enum):
@@ -22,8 +26,9 @@ class FilterOperation(str, Enum):
 
 class FilterCategory(str, Enum):
     """Enum for filter categories."""
-    CUSTOM = "custom"
-    DYNAMIC = "dynamic"
+    CUSTOM = "custom"     # For custom attributes (Eg. computes attributes)
+    DYNAMIC = "dynamic"   # For dynamic attributes
+    INTERNAL = "internal" # For internal attributes
 
 
 class ResponseStatus(str, Enum):
@@ -41,9 +46,23 @@ class EmbeddingConfig(BaseModel):
     name: str = Field(..., description="Name of the embedding model (e.g., huggingface model name)")
     data: List[float] = Field(default_factory=list, description="Embedding vector data")
 
+class InternalAttributes(BaseModel):
+    """Represents a internal attribute in the knowledge graph."""
+    owner: str = Field(..., description="Identifier for the attribute owner (must be a valid UUID)")
+    attributes: Optional[Dict[str, Union[str, int, float]]] = Field(
+        default_factory=dict, description="Additional attributes for the concept (strings and numbers only)"
+    )
+    
+    @field_validator("owner")
+    @classmethod
+    def validate_owner_is_uuid(cls, v: str) -> str:
+        """Validate that owner is a valid UUID."""
+        return validate_uuid_field(v, "owner")
 
 class Concept(BaseModel):
     """Represents a concept in the knowledge graph."""
+    
+    model_config = ConfigDict(exclude_none=True)
 
     id: str = Field(..., description="Unique identifier for the concept")
     name: str = Field(..., description="Name of the concept")
@@ -53,10 +72,13 @@ class Concept(BaseModel):
     )
     embeddings: Optional[EmbeddingConfig] = Field(None, description="Embedding configuration for the concept")
     tags: Optional[List[str]] = Field(default_factory=list, description="Optional list of tags for categorization")
+    internal_attributes: Optional[List[InternalAttributes]] = Field(None, description="Internal attributes for the concept")
 
 
 class Relation(BaseModel):
     """Represents a relationship between concepts."""
+    
+    model_config = ConfigDict(exclude_none=True)
 
     id: str = Field(..., description="Unique identifier for the relation")
     relation: str = Field(..., description="Type of relationship between nodes")
@@ -67,6 +89,7 @@ class Relation(BaseModel):
         default_factory=dict, description="Additional attributes for the relation (strings and numbers only)"
     )
     embeddings: Optional[EmbeddingConfig] = Field(None, description="Embedding configuration for the relation")
+    internal_attributes: Optional[List[InternalAttributes]] = Field(None, description="Internal attributes for the relation")
 
     @field_validator("node_ids", mode="after")
     @classmethod
@@ -389,9 +412,11 @@ class KnowledgeGraphQueryCriteriaFilter(BaseModel):
     KEY_RELATION: ClassVar[str] = "relation"
     
     category: FilterCategory = Field(..., description=f"Type of filter key ({', '.join(CATEGORY_ALLOW)})")
+    
     key: str = Field(..., description=f"Key to filter on (custom: {', '.join(CONCEPTS_CUSTOM_KEY_ALLOW)}; dynamic: any property)")
     operation: FilterOperation = Field(..., description=f"Comparison operation ({', '.join(OPERATION_ALLOW)})")
     value: List[Union[int, str, float]] = Field(..., min_length=1, description="Value(s) to compare against")
+    owner: Optional[str] = Field(None, description="Owner UUID for internal attributes (must be a valid UUID)")
     
     # Get query_type from outer context
     def get_query_type(self) -> Optional[str]:
@@ -476,6 +501,12 @@ class KnowledgeGraphQueryCriteriaFilter(BaseModel):
                     raise ValueError(f"Custom key '{self.key}' does not support EQSTR operation, use numeric operations (eq, gt, gte, lt, lte, range)")
         
         return self
+    
+    @field_validator("owner")
+    @classmethod
+    def validate_owner(cls, v: Optional[str]) -> Optional[str]:
+        """Validate that owner is a valid UUID when provided."""
+        return validate_uuid_field(v, "owner")
 
 
 class KnowledgeGraphQueryCriteria(BaseModel):
@@ -586,6 +617,8 @@ class KnowledgeGraphQueryRequest(BaseModel):
 
 
 class KnowledgeGraphQueryResponseRecord(BaseModel):
+    model_config = ConfigDict(exclude_none=True)
+    
     relationships: List[Relation] = Field(default_factory=list)
     concepts: List[Concept] = Field(default_factory=list)
 
@@ -612,6 +645,7 @@ class KnowledgeGraphQueryResponse(BaseModel):
 
     def model_dump(self, **kwargs) -> Dict[str, Any]:
         """Override model_dump to conditionally exclude records and request_id fields."""
+        kwargs.setdefault("exclude_none", True)
         data = super().model_dump(**kwargs)
 
         # Remove records field if status is not success OR if records is None/empty

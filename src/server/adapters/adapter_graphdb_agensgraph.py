@@ -4,12 +4,11 @@
 
 import json
 import logging
-from typing import Tuple, List, Dict, Any
-
-from server.database.graph_db.agensgraph.models.edge import Edge
+from typing import Tuple, List, Dict, Any, Optional
 from server.database.graph_db.agensgraph.models.node import Node
-from server.schemas.knowledge_graph import EmbeddingConfig
-from server.schemas.knowledge_graph import KnowledgeGraphQueryResponseRecord, Concept, Relation
+from server.database.graph_db.agensgraph.models.edge import Edge
+from server.schemas.knowledge_graph import EmbeddingConfig, KnowledgeGraphQueryResponseRecord, Concept, Relation, DEFAULT_PROPERTY_KEY_SEPARATOR
+from server.schemas.knowledge_graph_utils import prefix_field_with_separator, build_internal_attribute_key, split_field_by_separator
 
 
 class AdapterGraphdbAgensgraph:
@@ -112,6 +111,71 @@ class AdapterGraphdbAgensgraph:
         except Exception as e:
             self.logger.error(f"Failed to process embeddings: {str(e)}")
 
+    def _process_internal_attributes(self, internal_attributes: Dict) -> Dict[str, str]:
+        """Process internal attributes into prefixed property keys.
+        
+        Args:
+            internal_attributes: Dictionary containing 'owner' and 'attributes'
+            
+        Returns:
+            Dictionary with keys prefixed as 'owner_attributename'
+        """
+        processed_attributes = {}
+        
+        if not internal_attributes:
+            return processed_attributes
+            
+        owner = internal_attributes.get("owner", "")
+        attributes = internal_attributes.get("attributes", {})
+        
+        if owner and attributes:
+            for attr_name, attr_value in attributes.items():
+                # Use utility function to build internal attribute key
+                success, prefixed_key, error_msg = build_internal_attribute_key(owner, attr_name)
+                if success:
+                    processed_attributes[prefixed_key] = attr_value
+                else:
+                    # Log error but continue processing other attributes
+                    self.logger.warning(f"Failed to build internal attribute key: {error_msg}")
+                
+        return processed_attributes
+
+    def _extract_internal_attributes_from_properties(self, properties: Dict) -> Optional[List[Dict]]:
+        """Extract internal attributes from properties that contain the separator.
+        
+        Args:
+            properties: Dictionary of properties from database
+            
+        Returns:
+            List of dictionaries in InternalAttributes format or None if no internal attributes found
+        """
+        internal_attrs_by_owner = {}
+        
+        for k, v in properties.items():
+            if DEFAULT_PROPERTY_KEY_SEPARATOR in k:
+                # Split the key to get owner and attribute name
+                owner_part, attr_name = split_field_by_separator(k, DEFAULT_PROPERTY_KEY_SEPARATOR)
+                if owner_part and attr_name:
+                    # Group attributes by owner
+                    if owner_part not in internal_attrs_by_owner:
+                        internal_attrs_by_owner[owner_part] = {}
+                    internal_attrs_by_owner[owner_part][attr_name] = v
+        
+        # Convert to InternalAttributes format if any internal attributes found
+        if internal_attrs_by_owner:
+            # Handle all owners
+            internal_attributes_list = []
+            for owner_part, attributes in internal_attrs_by_owner.items():
+                # Use owner directly (no unsanitization needed since we're not sanitizing anymore)
+                original_owner = owner_part
+                internal_attributes_list.append({
+                    "owner": original_owner,
+                    "attributes": attributes
+                })
+            return internal_attributes_list
+        
+        return None
+
     def _process_concepts(self, concepts: List[Dict], mas_id: str, wksp_id: str, memory_type: str) -> List[Node]:
         """Process concept data into Node objects."""
         nodes = []
@@ -138,6 +202,13 @@ class AdapterGraphdbAgensgraph:
                 # Handle embeddings
                 if "embeddings" in concept and concept["embeddings"]:
                     self._process_embeddings(concept["embeddings"], properties)
+
+                # Handle internal attributes
+                if "internal_attributes" in concept and concept["internal_attributes"]:
+                    # Handle list of internal attributes
+                    for internal_attr in concept["internal_attributes"]:
+                        internal_attrs = self._process_internal_attributes(internal_attr)
+                        properties.update(internal_attrs)
 
                 # Create node with default label
                 labels = self._generate_labels()
@@ -169,6 +240,13 @@ class AdapterGraphdbAgensgraph:
                 # Handle embeddings
                 if "embeddings" in rel_data and rel_data["embeddings"]:
                     self._process_embeddings(rel_data["embeddings"], properties)
+
+                # Handle internal attributes
+                if "internal_attributes" in rel_data and rel_data["internal_attributes"]:
+                    # Handle list of internal attributes
+                    for internal_attr in rel_data["internal_attributes"]:
+                        internal_attrs = self._process_internal_attributes(internal_attr)
+                        properties.update(internal_attrs)
 
                 # Add metadata
                 if mas_id:
@@ -316,11 +394,15 @@ class AdapterGraphdbAgensgraph:
 
                     embeddings = EmbeddingConfig(data=embedding_vector, name=edge_props.get("embedding_model", ""))
 
-                # Create attributes without the embedding fields
+                # Extract internal attributes from properties
+                edge_internal_attributes = self._extract_internal_attributes_from_properties(edge_props)
+
+                # Create attributes without the embedding fields and internal attributes
+                excluded_fields = ["id", "node_ids", "relation", "embedding_vector", "embedding_model", "embeddings"]
                 edge_attributes = {
                     k: v
                     for k, v in edge_props.items()
-                    if k not in ["id", "node_ids", "relation", "embedding_vector", "embedding_model", "embeddings"]
+                    if k not in excluded_fields and DEFAULT_PROPERTY_KEY_SEPARATOR not in k  # Exclude internal attributes
                 }
 
                 relations.append(
@@ -329,6 +411,7 @@ class AdapterGraphdbAgensgraph:
                         relation=relation,
                         node_ids=node_ids,
                         attributes=edge_attributes,
+                        internal_attributes=edge_internal_attributes,
                         embeddings=embeddings,
                     )
                 )
@@ -350,16 +433,19 @@ class AdapterGraphdbAgensgraph:
 
                     node_embeddings = EmbeddingConfig(data=embedding_vector, name=node_props.get("embedding_model", ""))
 
-                # Create attributes without the embedding fields
+                # Create attributes without the embedding fields and internal attributes
+                excluded_fields = ["id", "name", "description", "embedding_vector", "embedding_model", "embeddings", "tags"]
                 node_attributes = {
                     k: v
                     for k, v in node_props.items()
-                    if k
-                    not in ["id", "name", "description", "embedding_vector", "embedding_model", "embeddings", "tags"]
+                    if k not in excluded_fields and DEFAULT_PROPERTY_KEY_SEPARATOR not in k  # Exclude internal attributes
                 }
 
                 # Parse tags JSON string back to list if needed
                 tags = self._parse_json_field(node_props.get("tags", []))
+
+                # Extract internal attributes from properties
+                node_internal_attributes = self._extract_internal_attributes_from_properties(node_props)
 
                 concepts.append(
                     Concept(
@@ -367,6 +453,7 @@ class AdapterGraphdbAgensgraph:
                         name=node_props.get("name", ""),
                         description=node_props.get("description"),
                         attributes=node_attributes,
+                        internal_attributes=node_internal_attributes,
                         embeddings=node_embeddings,
                         tags=tags,
                     )

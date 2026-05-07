@@ -7,6 +7,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Any
 
+from server.database.graph_db.agensgraph.src.db import quote_property_key
+
 logger = logging.getLogger(__name__)
 
 
@@ -100,8 +102,8 @@ class Node:
             else:
                 properties[key] = value
 
-        # Build property string with %s placeholders
-        props = ", ".join([f"{k}: %s" for k in properties.keys()])
+        # Build property string with %s placeholders, quoting keys for safety
+        props = ", ".join([f"{quote_property_key(k)}: %s" for k in properties.keys()])
         query = f"CREATE ({alias}:{labels} {{ {props} }}) RETURN {alias}"
 
         return query, tuple(properties.values())
