@@ -27,7 +27,7 @@ def register_provider(
     service_url = f"http://{service_host}:{service_port}"
 
     payload = {
-        "memory_provider_name": provider_name,
+        "name": provider_name,
         "description": description,
         "config": {
             "url": service_url,
