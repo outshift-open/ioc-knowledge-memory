@@ -663,7 +663,9 @@ class GraphDB:
         """
         try:
             # Define node clause once for the entire method
-            node_clause = "collect(n) as nodes"
+            node_clause = "collect(DISTINCT n) as nodes"
+            # Define relations clause to return relations
+            relations_clause = "collect(DISTINCT r) as relations"
             
             if not concepts_filter:
                 # Default query - get all nodes
@@ -681,7 +683,7 @@ class GraphDB:
             # Determine base query based on key type
             match key:
                 case KnowledgeGraphQueryCriteriaFilter.KEY_RELATIONS_CNT:
-                    base_query = "MATCH (n) WITH n, size((n)-[]-()) as relation_count"
+                    base_query = "MATCH (n)-[r]-() WITH n, r, size((n)-[]-()) as relation_count"
                     target_field = "relation_count"
                 case _:
                     base_query = "MATCH (n)"
@@ -763,7 +765,12 @@ class GraphDB:
                     return False, "", f"Error: Unsupported operation '{operation}'"
             
             # Build final query once
-            query = f"{base_query} WHERE {where_clause} RETURN {node_clause}"
+            if key == KnowledgeGraphQueryCriteriaFilter.KEY_RELATIONS_CNT:
+                # For relations count queries, return both nodes and relations
+                query = f"{base_query} WHERE {where_clause} RETURN {node_clause}, {relations_clause}"
+            else:
+                # For other queries, return only nodes
+                query = f"{base_query} WHERE {where_clause} RETURN {node_clause}"
             
             return True, query, ""
             
@@ -792,8 +799,13 @@ class GraphDB:
             with self.connect_db.engine.connect() as conn:
                 conn.exec_driver_sql(f'SET graph_path = "{graph_name}"')
 
-                node_result = conn.exec_driver_sql(query).fetchone()
-                nodes_raw = [dict(n) for n in node_result[0]] if node_result and node_result[0] else []
+                result = conn.exec_driver_sql(query).fetchone()
+                nodes_raw = [dict(n) for n in result[0]] if result and result[0] else []
+                
+                # Check if relations are also returned (for KEY_RELATIONS_CNT queries)
+                edges_raw = []
+                if result and len(result) > 1 and result[1]:
+                    edges_raw = [dict(r) for r in result[1]]
 
             filter_msg = ""
             if filter_element:
@@ -806,8 +818,15 @@ class GraphDB:
                 else:
                     filter_msg = f" (filtered by {key} {operation} {value[0]})"
             
-            msg = f"Found {len(nodes_raw)} nodes in graph '{graph_name}'{filter_msg}"
-            return True, {"nodes": nodes_raw}, msg
+            # Build return data - include edges if not empty
+            return_data = {"nodes": nodes_raw}
+            if edges_raw:
+                return_data["edges"] = edges_raw
+                msg = f"Found {len(nodes_raw)} nodes and {len(edges_raw)} edges in graph '{graph_name}'{filter_msg}"
+            else:
+                msg = f"Found {len(nodes_raw)} nodes in graph '{graph_name}'{filter_msg}"
+            
+            return True, return_data, msg
 
         except Exception as e:
             error_msg = f"Failed to fetch graph '{graph_name}': {str(e)}"
@@ -826,7 +845,7 @@ class GraphDB:
         """
         try:
             # Define relation clause once for the entire method
-            relation_clause = "collect(r) as relations"
+            relation_clause = "collect(DISTINCT r) as relations"
             
             if not relations_filter:
                 # Default query - get all relations

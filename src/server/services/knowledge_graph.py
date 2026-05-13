@@ -177,6 +177,11 @@ class KnowledgeGraphService:
                         status=ResponseStatus.FAILURE,
                         message=msg,
                     )
+                
+                # Log if edges are included in the response
+                if "edges" in concepts_data and concepts_data["edges"]:
+                    self.logger.info(f"Including {len(concepts_data['edges'])} edges in concepts query response")
+                
                 records = adapter.convert_models_to_query_response_records([concepts_data])
                 return KnowledgeGraphQueryResponse(
                     request_id=request_id,
