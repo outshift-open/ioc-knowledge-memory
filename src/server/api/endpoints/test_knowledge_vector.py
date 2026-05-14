@@ -24,6 +24,7 @@ from server.schemas.knowledge_vector import (
     KnowledgeVectorSimilaritySearchResult,
     EmbeddingConfig,
     EMBEDDING_VECTOR_SIZE,
+    ResponseStatus
 )
 
 # Valid 384-dimension embedding for use across all tests
@@ -649,3 +650,306 @@ class TestKnowledgeVectorSimilaritySearchEndpoint:
         assert response.status_code == status.HTTP_200_OK
         called_with = mock_search.call_args[0][0]
         assert called_with.metadata_filter is None
+
+
+class TestAgentScopedUpsert:
+    """Tests for agent_id scoping in vector upsert."""
+
+    @patch("server.api.endpoints.knowledge_vector.knowledge_vector_service.create_vector_store")
+    def test_upsert_with_agent_id_passed_to_service(self, mock_create):
+        """Test that agent_id in the request body is threaded through to the service."""
+        mock_create.return_value = KnowledgeVectorStoreResponse(
+            request_id="test-request-id",
+            status=ResponseStatus.SUCCESS,
+            message="Successfully saved 1 records"
+        )
+
+        request = {
+            **TEST_STORE_REQUEST,
+            "agent_id": "agent-abc",
+        }
+        response = test_client.post("/knowledge/vector", json=request)
+
+        assert response.status_code == status.HTTP_201_CREATED
+        called_with = mock_create.call_args[0][0]
+        assert called_with.agent_id == "agent-abc"
+
+    @patch("server.api.endpoints.knowledge_vector.knowledge_vector_service.create_vector_store")
+    def test_upsert_without_agent_id_passes_none(self, mock_create):
+        """Test that omitting agent_id defaults to None (MAS-scoped upsert)."""
+        mock_create.return_value = KnowledgeVectorStoreResponse(
+            request_id="test-request-id",
+            status=ResponseStatus.SUCCESS,
+            message="Successfully saved 1 records"
+        )
+
+        response = test_client.post("/knowledge/vector", json=TEST_STORE_REQUEST)
+
+        assert response.status_code == status.HTTP_201_CREATED
+        called_with = mock_create.call_args[0][0]
+        assert called_with.agent_id is None
+
+    @patch("server.api.endpoints.knowledge_vector.knowledge_vector_service.create_vector_store")
+    def test_upsert_record_id_auto_generated_when_omitted(self, mock_create):
+        """Test that omitting record id still passes a valid (auto-generated) id to service."""
+        mock_create.return_value = KnowledgeVectorStoreResponse(
+            request_id="test-request-id",
+            status=ResponseStatus.SUCCESS,
+            message="Successfully saved 1 records"
+        )
+
+        request = {
+            "request_id": "test-request-id",
+            "wksp_id": "test-wksp",
+            "mas_id": "test-mas",
+            "agent_id": "agent-abc",
+            "records": [
+                {
+                    # id intentionally omitted — should be auto-generated
+                    "content": "some document text",
+                    "embedding": {"data": DUMMY_EMBEDDING},
+                }
+            ],
+        }
+        response = test_client.post("/knowledge/vector", json=request)
+
+        assert response.status_code == status.HTTP_201_CREATED
+        called_with = mock_create.call_args[0][0]
+        # Auto-generated id should be a non-empty string
+        assert called_with.records[0].id != ""
+        assert isinstance(called_with.records[0].id, str)
+
+
+class TestAgentScopedDelete:
+    """Tests for agent_id scoping in vector delete."""
+
+    @patch("server.api.endpoints.knowledge_vector.knowledge_vector_service.delete_vector_store")
+    def test_delete_with_agent_id_passed_to_service(self, mock_delete):
+        """Test that agent_id in the delete request body is threaded through to the service."""
+        mock_delete.return_value = KnowledgeVectorDeleteResponse(
+            request_id="test-request-id",
+            status=ResponseStatus.SUCCESS,
+            message="Successfully soft-deleted vector vec-1"
+        )
+
+        request = {
+            "request_id": "test-request-id",
+            "wksp_id": "test-wksp",
+            "mas_id": "test-mas",
+            "agent_id": "agent-abc",
+            "id": "vec-1",
+            "soft_delete": True,
+        }
+        response = test_client.request("DELETE", "/knowledge/vector", json=request)
+
+        assert response.status_code == status.HTTP_200_OK
+        called_with = mock_delete.call_args[0][0]
+        assert called_with.agent_id == "agent-abc"
+        assert called_with.id == "vec-1"
+
+    @patch("server.api.endpoints.knowledge_vector.knowledge_vector_service.delete_vector_store")
+    def test_delete_without_agent_id_passes_none(self, mock_delete):
+        """Test that omitting agent_id defaults to None (MAS-scoped delete)."""
+        mock_delete.return_value = KnowledgeVectorDeleteResponse(
+            request_id="test-request-id",
+            status=ResponseStatus.SUCCESS,
+            message="Successfully soft-deleted vector vec-1"
+        )
+
+        request = {
+            "request_id": "test-request-id",
+            "wksp_id": "test-wksp",
+            "mas_id": "test-mas",
+            "id": "vec-1",
+        }
+        response = test_client.request("DELETE", "/knowledge/vector", json=request)
+
+        assert response.status_code == status.HTTP_200_OK
+        called_with = mock_delete.call_args[0][0]
+        assert called_with.agent_id is None
+
+    @patch("server.api.endpoints.knowledge_vector.knowledge_vector_service.delete_vector_store")
+    def test_delete_not_found_returns_404(self, mock_delete):
+        """Test that a not-found response from service yields HTTP 404."""
+        mock_delete.return_value = KnowledgeVectorDeleteResponse(
+            request_id="test-request-id",
+            status=ResponseStatus.NOT_FOUND,
+            message="Vector vec-missing not found",
+        )
+
+        request = {
+            "wksp_id": "test-wksp",
+            "mas_id": "test-mas",
+            "agent_id": "agent-abc",
+            "id": "vec-missing",
+        }
+        response = test_client.request("DELETE", "/knowledge/vector", json=request)
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json()["status"] == "not found"
+
+
+class TestAgentScopedSimilaritySearch:
+    """Tests for agent_id scoping in vector similarity search."""
+
+    @patch("server.api.endpoints.knowledge_vector.knowledge_vector_service.similarity_search")
+    def test_similarity_search_with_agent_id_passed_to_service(self, mock_search):
+        """Test that agent_id in the similarity search request is threaded through to service."""
+        mock_search.return_value = KnowledgeVectorSimilaritySearchResponse(
+            request_id="test-request-id",
+            status=ResponseStatus.SUCCESS,
+            message="Found 1 results",
+            results=[
+                KnowledgeVectorSimilaritySearchResult(
+                    score=0.08,
+                    id="doc-1",
+                    content="agent-specific text",
+                )
+            ],
+        )
+
+        request = {
+            **TEST_SIMILARITY_SEARCH_REQUEST,
+            "agent_id": "agent-abc",
+        }
+        response = test_client.post("/knowledge/vector/query/similarity", json=request)
+
+        assert response.status_code == status.HTTP_200_OK
+        called_with = mock_search.call_args[0][0]
+        assert called_with.agent_id == "agent-abc"
+
+    @patch("server.api.endpoints.knowledge_vector.knowledge_vector_service.similarity_search")
+    def test_similarity_search_without_agent_id_passes_none(self, mock_search):
+        """Test that omitting agent_id defaults to None (searches all MAS records)."""
+        mock_search.return_value = KnowledgeVectorSimilaritySearchResponse(
+            request_id="test-request-id",
+            status=ResponseStatus.SUCCESS,
+            message="Found 0 results",
+        )
+
+        response = test_client.post("/knowledge/vector/query/similarity", json=TEST_SIMILARITY_SEARCH_REQUEST)
+
+        assert response.status_code == status.HTTP_200_OK
+        called_with = mock_search.call_args[0][0]
+        assert called_with.agent_id is None
+
+    @patch("server.api.endpoints.knowledge_vector.knowledge_vector_service.similarity_search")
+    def test_similarity_search_agent_scoped_not_found(self, mock_search):
+        """Test that a not-found response from agent-scoped search yields HTTP 404."""
+        mock_search.return_value = KnowledgeVectorSimilaritySearchResponse(
+            request_id="test-request-id",
+            status=ResponseStatus.NOT_FOUND,
+            message="MAS store test-mas not found",
+        )
+
+        request = {**TEST_SIMILARITY_SEARCH_REQUEST, "agent_id": "agent-abc"}
+        response = test_client.post("/knowledge/vector/query/similarity", json=request)
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json()["status"] == "not found"
+
+
+class TestAgentIdPassedThroughToDatabase:
+    """Tests verifying agent_id is threaded all the way to the database layer."""
+
+    @patch("server.services.knowledge_vector.VectorDB")
+    @patch("server.services.knowledge_vector.KnowledgeVectorService._mas_exists")
+    def test_delete_passes_agent_id_to_db_layer(self, mock_mas_exists, mock_vector_db_class):
+        """Test that agent_id is passed from service to db.delete_vector()."""
+        mock_mas_exists.return_value = True
+        mock_db_instance = mock_vector_db_class.return_value
+        mock_db_instance.delete_vector.return_value = True
+
+        request = {
+            "request_id": "test-request-id",
+            "wksp_id": "test-wksp",
+            "mas_id": "test-mas",
+            "agent_id": "agent-abc",
+            "id": "vec-1",
+            "soft_delete": True,
+        }
+        response = test_client.request("DELETE", "/knowledge/vector", json=request)
+
+        assert response.status_code == status.HTTP_200_OK
+        # Verify db.delete_vector was called with all expected parameters
+        mock_db_instance.delete_vector.assert_called_once()
+        call_kwargs = mock_db_instance.delete_vector.call_args[1]
+        assert call_kwargs["agent_id"] == "agent-abc"
+        assert call_kwargs["vector_id"] == "vec-1"
+        assert call_kwargs["wksp_id"] == "test-wksp"
+        assert call_kwargs["mas_id"] == "test-mas"
+        assert call_kwargs["soft_delete"] is True
+
+    @patch("server.services.knowledge_vector.VectorDB")
+    @patch("server.services.knowledge_vector.KnowledgeVectorService._mas_exists")
+    def test_delete_passes_none_agent_id_to_db_layer_when_omitted(self, mock_mas_exists, mock_vector_db_class):
+        """Test that agent_id=None is passed to db when not provided in request."""
+        mock_mas_exists.return_value = True
+        mock_db_instance = mock_vector_db_class.return_value
+        mock_db_instance.delete_vector.return_value = True
+
+        request = {
+            "request_id": "test-request-id",
+            "wksp_id": "test-wksp",
+            "mas_id": "test-mas",
+            "id": "vec-1",
+        }
+        response = test_client.request("DELETE", "/knowledge/vector", json=request)
+
+        assert response.status_code == status.HTTP_200_OK
+        call_kwargs = mock_db_instance.delete_vector.call_args[1]
+        assert call_kwargs["agent_id"] is None
+        assert call_kwargs["wksp_id"] == "test-wksp"
+        assert call_kwargs["mas_id"] == "test-mas"
+
+    @patch("server.services.knowledge_vector.VectorDB")
+    @patch("server.services.knowledge_vector.KnowledgeVectorService._mas_exists")
+    def test_query_distance_l2_passes_agent_id_to_db_layer(self, mock_mas_exists, mock_vector_db_class):
+        """Test that agent_id is passed for QUERY_TYPE_DISTANCE_L2 queries."""
+        mock_mas_exists.return_value = True
+        mock_db_instance = mock_vector_db_class.return_value
+        mock_db_instance.query.return_value = []
+
+        request = {
+            "request_id": "test-request-id",
+            "wksp_id": "test-wksp",
+            "mas_id": "test-mas",
+            "agent_id": "agent-abc",
+            "query_criteria": {
+                "query_type": "distance_l2",
+                "embedding": {"data": DUMMY_EMBEDDING},
+                "limit": 5,
+            },
+        }
+        response = test_client.post("/knowledge/vector/query", json=request)
+
+        assert response.status_code == status.HTTP_200_OK
+        mock_db_instance.query.assert_called_once()
+        call_args = mock_db_instance.query.call_args[0][0]
+        assert call_args.agent_id == "agent-abc"
+
+    @patch("server.services.knowledge_vector.VectorDB")
+    @patch("server.services.knowledge_vector.KnowledgeVectorService._mas_exists")
+    def test_query_distance_cosine_passes_agent_id_to_db_layer(self, mock_mas_exists, mock_vector_db_class):
+        """Test that agent_id is passed for QUERY_TYPE_DISTANCE_COSINE queries."""
+        mock_mas_exists.return_value = True
+        mock_db_instance = mock_vector_db_class.return_value
+        mock_db_instance.query.return_value = []
+
+        request = {
+            "request_id": "test-request-id",
+            "wksp_id": "test-wksp",
+            "mas_id": "test-mas",
+            "agent_id": "agent-xyz",
+            "query_criteria": {
+                "query_type": "distance_cosine",
+                "embedding": {"data": DUMMY_EMBEDDING},
+                "limit": 10,
+            },
+        }
+        response = test_client.post("/knowledge/vector/query", json=request)
+
+        assert response.status_code == status.HTTP_200_OK
+        mock_db_instance.query.assert_called_once()
+        call_args = mock_db_instance.query.call_args[0][0]
+        assert call_args.agent_id == "agent-xyz"

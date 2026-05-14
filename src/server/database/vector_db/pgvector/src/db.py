@@ -33,6 +33,7 @@ class VectorDBStoreRequest:
     schema_name: str
     wksp_id: str
     mas_id: str
+    agent_id: Optional[str]
     records: List[KnowledgeVectorStoreRequestRecord]
 
 
@@ -43,6 +44,7 @@ class VectorDBQueryRequest(BaseModel):
     query_criteria: KnowledgeVectorQueryCriteria = Field(..., description="Query criteria")
     mas_id: str = Field(..., description="MAS ID for filtering")
     wksp_id: str = Field(..., description="Workspace ID for filtering")
+    agent_id: Optional[str] = Field(default=None, description="Optional agent ID for agent-scoped filtering")
 
 
 class VectorDB:
@@ -186,6 +188,7 @@ class VectorDB:
                         deleted_by VARCHAR DEFAULT current_user,
                         wksp_uuid UUID NOT NULL,
                         mas_uuid UUID NOT NULL,
+                        agent_id VARCHAR NULL,
                         document_txt VARCHAR NOT NULL,
                         embedding_vector VECTOR({EMBEDDING_VECTOR_SIZE}) NOT NULL,
                         metadata JSONB NULL
@@ -222,11 +225,19 @@ class VectorDB:
 
                 # Create index on mas_uuid for better query performance
                 create_mas_index_query = f"""
-                    CREATE INDEX IF NOT EXISTS document_embeddings_mas_uuid_idx 
+                    CREATE INDEX IF NOT EXISTS document_embeddings_mas_uuid_idx
                     ON "{schema_name}".document_embeddings (mas_uuid)
                 """
                 conn.execute(text(create_mas_index_query))
                 self.logger.info(f"Ensured index exists on mas_uuid in schema '{schema_name}'")
+
+                # Create index on agent_id for agent-scoped queries
+                create_agent_index_query = f"""
+                    CREATE INDEX IF NOT EXISTS document_embeddings_agent_id_idx
+                    ON "{schema_name}".document_embeddings (agent_id)
+                """
+                conn.execute(text(create_agent_index_query))
+                self.logger.info(f"Ensured index exists on agent_id in schema '{schema_name}'")
 
                 # Create index on deleted_at for soft delete queries
                 create_deleted_at_index_query = f"""
@@ -296,11 +307,12 @@ class VectorDB:
                         embedding_str = str(record.embedding.data).replace(" ", "")
 
                         upsert_query = f"""
-                            INSERT INTO {table_name} (id, wksp_uuid, mas_uuid, document_txt, embedding_vector, metadata, created_at)
-                            VALUES (:id, :wksp_uuid, :mas_uuid, :document_txt, :embedding_vector, :metadata, now())
+                            INSERT INTO {table_name} (id, wksp_uuid, mas_uuid, agent_id, document_txt, embedding_vector, metadata, created_at)
+                            VALUES (:id, :wksp_uuid, :mas_uuid, :agent_id, :document_txt, :embedding_vector, :metadata, now())
                             ON CONFLICT (id) DO UPDATE SET
                                 wksp_uuid = EXCLUDED.wksp_uuid,
                                 mas_uuid = EXCLUDED.mas_uuid,
+                                agent_id = EXCLUDED.agent_id,
                                 document_txt = EXCLUDED.document_txt,
                                 embedding_vector = EXCLUDED.embedding_vector,
                                 metadata = EXCLUDED.metadata,
@@ -313,6 +325,7 @@ class VectorDB:
                                 "id": record.id,
                                 "wksp_uuid": request.wksp_id,
                                 "mas_uuid": request.mas_id,
+                                "agent_id": getattr(request, "agent_id", None),
                                 "document_txt": record.content,
                                 "embedding_vector": embedding_str,
                                 "metadata": json.dumps(record.metadata) if record.metadata is not None else None,
@@ -350,6 +363,9 @@ class VectorDB:
             with self.connect_db.engine.begin() as conn:
                 query_type = request.query_criteria.query_type
 
+                # Build agent_id filter clause once for reuse across query types
+                agent_clause = " AND agent_id = :agent_id" if request.agent_id else ""
+
                 if query_type == QUERY_TYPE_INTERNAL_LIST_BY_WKSP_ID:
                     # List all records for workspace
                     query = f"""
@@ -366,34 +382,37 @@ class VectorDB:
                     result = conn.execute(text(query), {"wksp_uuid": request.wksp_id})
 
                 elif query_type == QUERY_TYPE_INTERNAL_LIST_BY_MAS_ID:
-                    # List all records for MAS
+                    # List all records for MAS, optionally scoped to an agent
                     query = f"""
                         SELECT id, document_txt as content, embedding_vector as embedding, metadata,
                                EXTRACT(EPOCH FROM created_at) as created_at,
                                EXTRACT(EPOCH FROM updated_at) as updated_at
                         FROM {table_name}
-                        WHERE mas_uuid = :mas_uuid AND deleted_at IS NULL
+                        WHERE mas_uuid = :mas_uuid AND deleted_at IS NULL{agent_clause}
                         ORDER BY created_at DESC
                     """
                     if request.query_criteria.limit:
                         query += f" LIMIT {request.query_criteria.limit}"
 
-                    result = conn.execute(text(query), {"mas_uuid": request.mas_id})
+                    params = {"mas_uuid": request.mas_id}
+                    if request.agent_id:
+                        params["agent_id"] = request.agent_id
+                    result = conn.execute(text(query), params)
 
                 elif query_type == QUERY_TYPE_GET_BY_ID:
-                    # Get specific record by ID
+                    # Get specific record by ID, optionally scoped to an agent
                     query = f"""
                         SELECT id, document_txt as content, embedding_vector as embedding, metadata,
                                EXTRACT(EPOCH FROM created_at) as created_at,
                                EXTRACT(EPOCH FROM updated_at) as updated_at
                         FROM {table_name}
-                        WHERE id = :id AND wksp_uuid = :wksp_uuid AND mas_uuid = :mas_uuid AND deleted_at IS NULL
+                        WHERE id = :id AND wksp_uuid = :wksp_uuid AND mas_uuid = :mas_uuid AND deleted_at IS NULL{agent_clause}
                     """
 
-                    result = conn.execute(
-                        text(query),
-                        {"id": request.query_criteria.id, "wksp_uuid": request.wksp_id, "mas_uuid": request.mas_id},
-                    )
+                    params = {"id": request.query_criteria.id, "wksp_uuid": request.wksp_id, "mas_uuid": request.mas_id}
+                    if request.agent_id:
+                        params["agent_id"] = request.agent_id
+                    result = conn.execute(text(query), params)
 
                 elif query_type == QUERY_TYPE_DISTANCE_L2:
                     # L2 distance similarity search
@@ -404,16 +423,16 @@ class VectorDB:
                                EXTRACT(EPOCH FROM created_at) as created_at,
                                EXTRACT(EPOCH FROM updated_at) as updated_at
                         FROM {table_name}
-                        WHERE wksp_uuid = :wksp_uuid AND mas_uuid = :mas_uuid AND deleted_at IS NULL
+                        WHERE wksp_uuid = :wksp_uuid AND mas_uuid = :mas_uuid AND deleted_at IS NULL{agent_clause}
                         ORDER BY embedding_vector <-> :query_embedding
                     """
                     if request.query_criteria.limit:
                         query += f" LIMIT {request.query_criteria.limit}"
 
-                    result = conn.execute(
-                        text(query),
-                        {"query_embedding": embedding_str, "wksp_uuid": request.wksp_id, "mas_uuid": request.mas_id},
-                    )
+                    params = {"query_embedding": embedding_str, "wksp_uuid": request.wksp_id, "mas_uuid": request.mas_id}
+                    if request.agent_id:
+                        params["agent_id"] = request.agent_id
+                    result = conn.execute(text(query), params)
 
                 elif query_type == QUERY_TYPE_DISTANCE_COSINE:
                     # Cosine distance similarity search
@@ -424,16 +443,16 @@ class VectorDB:
                                EXTRACT(EPOCH FROM created_at) as created_at,
                                EXTRACT(EPOCH FROM updated_at) as updated_at
                         FROM {table_name}
-                        WHERE wksp_uuid = :wksp_uuid AND mas_uuid = :mas_uuid AND deleted_at IS NULL
+                        WHERE wksp_uuid = :wksp_uuid AND mas_uuid = :mas_uuid AND deleted_at IS NULL{agent_clause}
                         ORDER BY embedding_vector <=> :query_embedding
                     """
                     if request.query_criteria.limit:
                         query += f" LIMIT {request.query_criteria.limit}"
 
-                    result = conn.execute(
-                        text(query),
-                        {"query_embedding": embedding_str, "wksp_uuid": request.wksp_id, "mas_uuid": request.mas_id},
-                    )
+                    params = {"query_embedding": embedding_str, "wksp_uuid": request.wksp_id, "mas_uuid": request.mas_id}
+                    if request.agent_id:
+                        params["agent_id"] = request.agent_id
+                    result = conn.execute(text(query), params)
 
                 else:
                     raise ValueError(f"Unsupported query type: {query_type}")
@@ -493,6 +512,7 @@ class VectorDB:
         limit: int = 10,
         metric: str = "l2",
         metadata_filter: Optional[Dict] = None,
+        agent_id: Optional[str] = None,
     ) -> List[Dict]:
         """Find document embeddings nearest to a query vector using HNSW index.
 
@@ -505,6 +525,7 @@ class VectorDB:
             metric: Distance metric — 'l2' or 'cosine'
             metadata_filter: Optional dict with keys: doc_index, chunk_index, data_source,
                              conversation_timestamp_from, conversation_timestamp_to
+            agent_id: Optional agent ID to scope results to a single agent
 
         Returns:
             List of dicts with keys: id, content, embedding, distance, metadata
@@ -516,9 +537,12 @@ class VectorDB:
         vec_str = "[" + ",".join(str(v) for v in query_vector) + "]"
         table_name = f'"{schema_name}"."{TABLE_NAME}"'
 
-        # Build dynamic metadata filter clauses
+        # Build dynamic filter clauses
         params: Dict = {"vec": vec_str, "wksp_uuid": wksp_id, "mas_uuid": mas_id, "limit": limit}
         extra_clauses = ""
+        if agent_id is not None:
+            extra_clauses += " AND agent_id = :agent_id"
+            params["agent_id"] = agent_id
         if metadata_filter:
             if metadata_filter.get("doc_index") is not None:
                 extra_clauses += " AND (metadata->>'doc_index')::INTEGER = :doc_index"
@@ -576,14 +600,25 @@ class VectorDB:
             self.logger.error(f"Failed to execute similarity search: {str(e)}")
             raise RuntimeError(f"Failed to execute similarity search: {str(e)}")
 
-    def delete_vector(self, schema_name: str, vector_id: str, soft_delete: bool = True) -> bool:
+    def delete_vector(
+        self,
+        schema_name: str,
+        vector_id: str,
+        wksp_id: str,
+        mas_id: str,
+        soft_delete: bool = True,
+        agent_id: Optional[str] = None,
+    ) -> bool:
         """
         Delete a vector record from the database.
 
         Args:
             schema_name: Name of the schema containing the table
             vector_id: ID of the vector to delete
+            wksp_id: Workspace ID to scope deletion
+            mas_id: MAS ID to scope deletion
             soft_delete: If True, perform soft delete; if False, perform hard delete
+            agent_id: Optional agent ID to scope deletion (only delete if record belongs to this agent)
 
         Returns:
             bool: True if deletion was successful, False if record not found
@@ -594,24 +629,30 @@ class VectorDB:
         try:
             table_name = f'"{schema_name}"."{TABLE_NAME}"'
 
+            # Build agent_id filter clause
+            agent_clause = " AND agent_id = :agent_id" if agent_id else ""
+            params = {"vector_id": vector_id, "wksp_id": wksp_id, "mas_id": mas_id}
+            if agent_id:
+                params["agent_id"] = agent_id
+
             with self.connect_db.engine.begin() as conn:
                 if soft_delete:
                     # Soft delete: Update deleted_at and deleted_by fields
                     query = f"""
                         UPDATE {table_name}
                         SET deleted_at = now(), deleted_by = current_user, updated_at = now(), updated_by = current_user
-                        WHERE id = :vector_id AND deleted_at IS NULL
+                        WHERE id = :vector_id AND wksp_uuid = :wksp_id AND mas_uuid = :mas_id AND deleted_at IS NULL{agent_clause}
                     """
-                    self.logger.info(f"Performing soft delete for vector {vector_id} in {table_name}")
+                    self.logger.info(f"Performing soft delete for vector {vector_id} in {table_name} (wksp_id={wksp_id}, mas_id={mas_id}, agent_id={agent_id})")
                 else:
                     # Hard delete: Permanently remove the record
                     query = f"""
                         DELETE FROM {table_name}
-                        WHERE id = :vector_id
+                        WHERE id = :vector_id AND wksp_uuid = :wksp_id AND mas_uuid = :mas_id{agent_clause}
                     """
-                    self.logger.info(f"Performing hard delete for vector {vector_id} in {table_name}")
+                    self.logger.info(f"Performing hard delete for vector {vector_id} in {table_name} (wksp_id={wksp_id}, mas_id={mas_id}, agent_id={agent_id})")
 
-                result = conn.execute(text(query), {"vector_id": vector_id})
+                result = conn.execute(text(query), params)
                 rows_affected = result.rowcount
 
                 if rows_affected > 0:

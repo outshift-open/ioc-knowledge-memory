@@ -133,7 +133,7 @@ class EmbeddingConfig(BaseModel):
 class KnowledgeVectorStoreRequestRecord(BaseModel):
     """Represents a vector in the knowledge vector store."""
 
-    id: str = Field(..., description="Unique identifier")
+    id: str = Field(default_factory=lambda: str(uuid4()), description="Unique identifier — auto-generated if omitted, enabling idempotent upserts when provided")
     content: str = Field(..., description="content in plain text")
     embedding: EmbeddingConfig = Field(..., description="Embedding")
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="Optional arbitrary metadata")
@@ -157,6 +157,7 @@ class KnowledgeVectorStoreRequest(BaseModel):
     )
     wksp_id: str = Field(min_length=1, description="ID for the Multi-Agent System Workspace")
     mas_id: str = Field(min_length=1, description="ID for the Multi-Agent System")
+    agent_id: Optional[str] = Field(default=None, description="Optional agent ID for agent-scoped storage")
     records: List[KnowledgeVectorStoreRequestRecord] = Field(default_factory=list, description="List of vector records")
 
     model_config = ConfigDict(
@@ -245,6 +246,7 @@ class KnowledgeVectorDeleteRequest(BaseModel):
     )
     wksp_id: str = Field(min_length=1, description="The workspace ID for the request")
     mas_id: str = Field(min_length=1, description="ID for the Multi-Agent System")
+    agent_id: Optional[str] = Field(default=None, description="Optional agent ID for agent-scoped deletion")
     id: str = Field(min_length=1, description="ID of vector to delete")
     soft_delete: bool = Field(default=True, description="Soft delete the vector")
 
@@ -327,6 +329,7 @@ class KnowledgeVectorQueryRequest(BaseModel):
     )
     wksp_id: str = Field(min_length=1, description="ID for the Workspace")
     mas_id: str = Field(min_length=1, description="ID for the Multi-Agent System")
+    agent_id: Optional[str] = Field(default=None, description="Optional agent ID for agent-scoped queries")
     query_criteria: KnowledgeVectorQueryCriteria = Field(
         default_factory=KnowledgeVectorQueryCriteria,  # This will create a new QueryCriteria with default values
         description="Query criteria",
@@ -485,6 +488,7 @@ class KnowledgeVectorSimilaritySearchRequest(BaseModel):
     )
     wksp_id: str = Field(min_length=1, description="ID for the Workspace")
     mas_id: str = Field(min_length=1, description="ID for the Multi-Agent System")
+    agent_id: Optional[str] = Field(default=None, description="Optional agent ID to scope similarity search to a single agent")
     embedding: List[float] = Field(..., description="Query embedding vector")
     limit: int = Field(default=10, ge=1, le=100, description="Maximum number of results to return")
     metric: Literal["cosine", "l2"] = Field(default="l2", description="Distance metric")

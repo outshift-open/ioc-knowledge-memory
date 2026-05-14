@@ -141,6 +141,7 @@ class KnowledgeVectorService:
             vector_request.schema_name = self.get_schema_name(data.mas_id)
             vector_request.mas_id = data.mas_id
             vector_request.wksp_id = data.wksp_id
+            vector_request.agent_id = data.agent_id
             vector_request.records = data.records
 
             save_success = db.save(vector_request)
@@ -186,7 +187,7 @@ class KnowledgeVectorService:
 
             # Create query request for database layer
             query_request = VectorDBQueryRequest(
-                schema_name=schema_name, query_criteria=data.query_criteria, mas_id=data.mas_id, wksp_id=data.wksp_id
+                schema_name=schema_name, query_criteria=data.query_criteria, mas_id=data.mas_id, wksp_id=data.wksp_id, agent_id=data.agent_id
             )
 
             # Execute query
@@ -262,6 +263,7 @@ class KnowledgeVectorService:
                 limit=data.limit,
                 metric=data.metric,
                 metadata_filter=data.metadata_filter.model_dump(exclude_none=True) if data.metadata_filter else None,
+                agent_id=data.agent_id,
             )
 
             results = [
@@ -321,7 +323,14 @@ class KnowledgeVectorService:
             db = VectorDB()
 
             # Perform delete operation
-            delete_success = db.delete_vector(schema_name=schema_name, vector_id=data.id, soft_delete=data.soft_delete)
+            delete_success = db.delete_vector(
+                schema_name=schema_name,
+                vector_id=data.id,
+                wksp_id=data.wksp_id,
+                mas_id=data.mas_id,
+                soft_delete=data.soft_delete,
+                agent_id=data.agent_id,
+            )
 
             if delete_success:
                 delete_type = "soft deleted" if data.soft_delete else "permanently deleted"
