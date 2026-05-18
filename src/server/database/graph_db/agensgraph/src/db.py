@@ -627,12 +627,25 @@ class GraphDB:
         """
         match operation:
             case FilterOperation.EQSTR:
-                # String equality comparison
-                escaped_value = value[0].replace("'", "\\'")
-                return f"{target_field} IS NOT NULL AND {target_field} = '{escaped_value}'"
+                # String equality comparison with OR logic for multiple values
+                if len(value) == 1:
+                    # Single value - simple equality
+                    escaped_value = value[0].replace("'", "\\'")
+                    return f"{target_field} IS NOT NULL AND {target_field} = '{escaped_value}'"
+                else:
+                    # Multiple values - OR logic
+                    escaped_values = [v.replace("'", "\\'") for v in value]
+                    or_conditions = [f"{target_field} = '{v}'" for v in escaped_values]
+                    return f"{target_field} IS NOT NULL AND ({' OR '.join(or_conditions)})"
             case FilterOperation.EQ:
-                # Numeric equality
-                return f"{target_field} IS NOT NULL AND {target_field} = {value[0]}"
+                # Numeric equality comparison with OR logic for multiple values
+                if len(value) == 1:
+                    # Single value - simple equality
+                    return f"{target_field} IS NOT NULL AND {target_field} = {value[0]}"
+                else:
+                    # Multiple values - OR logic
+                    or_conditions = [f"{target_field} = {v}" for v in value]
+                    return f"{target_field} IS NOT NULL AND ({' OR '.join(or_conditions)})"
             case FilterOperation.GT:
                 # Greater than
                 return f"{target_field} IS NOT NULL AND {target_field} > {value[0]}"
@@ -780,51 +793,172 @@ class GraphDB:
             return False, "", error_msg
 
     def get_all_concepts(self, graph_name: str, concepts_filter=None) -> tuple[bool, dict, str]:
-        """Fetch all nodes from the given graph with optional filtering.
+        """Fetch all nodes from the given graph with optional multi-filter support.
+
+        This method supports complex filtering with multiple filters applied sequentially using AND logic.
+        Each filter is executed independently, then results are intersected to produce the final result.
+
+        Multi-Filter AND Logic:
+        - Filters are applied in the order provided
+        - Node results: Intersection (AND) of all filter results by node ID
+        - Edge results: Special handling based on filter type:
+          * relations_cnt filters: Apply AND logic for edges (intersect edge IDs)
+          * Other filters: Carry edges along unchanged (no edge filtering)
+        - All filters are executed even if intermediate results are empty (for complete logging)
+
+        Filter Types and Edge Behavior:
+        - relations_cnt: Returns both nodes and edges, edges participate in AND logic
+        - name, category, custom properties: Return only nodes, edges carried along from previous filters
+        
+        OR Logic Within Filters:
+        - EQSTR operation: Multiple string values treated as OR (value1 OR value2 OR ...)
+        - EQ operation: Multiple numeric values treated as OR (value1 OR value2 OR ...)
+        - Other operations (GT, GTE, LT, LTE, RANGE): Single values only
 
         Args:
-            graph_name: Name of the graph to fetch from
-            concepts_filter: Optional List[KnowledgeGraphQueryCriteriaFilter] for filtering (uses first element)
+            graph_name (str): Name of the graph to fetch from
+            concepts_filter (Optional[List[KnowledgeGraphQueryCriteriaFilter]]): 
+                List of filters to apply sequentially with AND logic. If None or empty, 
+                returns all nodes in the graph.
 
         Returns:
-            Tuple containing (success: bool, data: dict with 'nodes' list, msg: str)
+            Tuple[bool, dict, str]: 
+                - success: True if operation succeeded, False otherwise
+                - data: Dictionary containing:
+                  * 'nodes': List of node dictionaries matching all filters
+                  * 'edges': List of edge dictionaries (only if any filter returns edges)
+                - message: Detailed message showing filter execution and results
+
+        Raises:
+            Exception: If database connection fails or query execution errors occur
         """
         try:
-            # Build query using generic filter function - pass first element of array
-            filter_element = concepts_filter[0] if concepts_filter and len(concepts_filter) > 0 else None
-            success, query, error_msg = self._get_concepts_filter_query(graph_name, filter_element)
-            if not success:
-                return False, {}, error_msg
+            # Start with all nodes if no filters
+            if not concepts_filter or len(concepts_filter) == 0:
+                success, query, error_msg = self._get_concepts_filter_query(graph_name, None)
+                if not success:
+                    return False, {}, error_msg
+                    
+                with self.connect_db.engine.connect() as conn:
+                    conn.exec_driver_sql(f'SET graph_path = "{graph_name}"')
+                    result = conn.exec_driver_sql(query).fetchone()
+                    nodes_raw = [dict(n) for n in result[0]] if result and result[0] else []
+                    
+                msg = f"Found {len(nodes_raw)} nodes in graph '{graph_name}'"
+                return True, {"nodes": nodes_raw}, msg
 
+            # Apply filters sequentially with AND logic
+            current_nodes = None
+            current_edges = []
+            filter_messages = []
+            
             with self.connect_db.engine.connect() as conn:
                 conn.exec_driver_sql(f'SET graph_path = "{graph_name}"')
-
-                result = conn.exec_driver_sql(query).fetchone()
-                nodes_raw = [dict(n) for n in result[0]] if result and result[0] else []
                 
-                # Check if relations are also returned (for KEY_RELATIONS_CNT queries)
-                edges_raw = []
-                if result and len(result) > 1 and result[1]:
-                    edges_raw = [dict(r) for r in result[1]]
+                for i, filter_element in enumerate(concepts_filter):
+                    try:
+                        # Build query for this filter
+                        success, query, error_msg = self._get_concepts_filter_query(graph_name, filter_element)
+                        if not success:
+                            error_msg = f"Filter {i+1} failed: {error_msg}"
+                            self.logger.error(error_msg)
+                            return False, {}, error_msg
 
-            filter_msg = ""
-            if filter_element:
-                key = filter_element.key
-                operation = filter_element.operation
-                value = filter_element.value
-                
-                if operation == "range":
-                    filter_msg = f" (filtered by {key} {operation} [{value[0]}, {value[1]}])"
-                else:
-                    filter_msg = f" (filtered by {key} {operation} {value[0]})"
+                        # Execute query
+                        result = conn.exec_driver_sql(query).fetchone()
+                        filter_nodes = [dict(n) for n in result[0]] if result and result[0] else []
+                        
+                        # Check for edges (for KEY_RELATIONS_CNT queries)
+                        filter_edges = []
+                        if result and len(result) > 1 and result[1]:
+                            filter_edges = [dict(r) for r in result[1]]
+
+                        # Create filter summary message
+                        key = filter_element.key
+                        operation = filter_element.operation
+                        value = filter_element.value
+                        
+                        if operation == "range":
+                            filter_summary = f"Filter {i+1}: {key} {operation} [{value[0]}, {value[1]}] -> {len(filter_nodes)} nodes"
+                        elif len(value) == 1:
+                            filter_summary = f"Filter {i+1}: {key} {operation} {value[0]} -> {len(filter_nodes)} nodes"
+                        else:
+                            # Multiple values - show all values
+                            filter_summary = f"Filter {i+1}: {key} {operation} {value} -> {len(filter_nodes)} nodes"
+                        
+                        if filter_edges:
+                            filter_summary += f", {len(filter_edges)} edges"
+                        
+                        filter_messages.append(filter_summary)
+
+                        # Apply AND logic: intersect with previous results
+                        if current_nodes is None:
+                            # First filter - use results as-is
+                            current_nodes = filter_nodes
+                            # Deduplicate edges by ID
+                            if filter_edges:
+                                edge_dict = {}
+                                for edge in filter_edges:
+                                    edge_id = edge.get('id')
+                                    if edge_id and edge_id not in edge_dict:
+                                        edge_dict[edge_id] = edge
+                                current_edges = list(edge_dict.values())
+                            else:
+                                current_edges = []
+                        else:
+                            # Subsequent filters - intersect by node ID
+                            current_node_ids = {node.get('id') for node in current_nodes if 'id' in node}
+                            filter_node_ids = {node.get('id') for node in filter_nodes if 'id' in node}
+                            intersected_ids = current_node_ids & filter_node_ids
+                            
+                            # Keep only nodes that exist in both sets
+                            current_nodes = [node for node in current_nodes if node.get('id') in intersected_ids]
+                            
+                            # For edges, apply AND logic only for relations_cnt filters
+                            # Other filters (name, category, etc.) don't affect edges
+                            if filter_element.key == KnowledgeGraphQueryCriteriaFilter.KEY_RELATIONS_CNT:
+                                # This is a relations_cnt filter - apply AND logic for edges
+                                if current_edges:  # Only process if we have edges from previous filters
+                                    if filter_edges:
+                                        # Both have edges - intersect
+                                        current_edge_ids = {edge.get('id') for edge in current_edges if 'id' in edge}
+                                        filter_edge_ids = {edge.get('id') for edge in filter_edges if 'id' in edge}
+                                        intersected_edge_ids = current_edge_ids & filter_edge_ids
+                                        
+                                        # Keep only edges that exist in both sets
+                                        current_edges = [edge for edge in current_edges if edge.get('id') in intersected_edge_ids]
+                                    else:
+                                        # Current has edges, filter has none - AND result is empty
+                                        current_edges = []
+                            # For non-relations_cnt filters, edges are carried along as-is (no change to current_edges)
+                            
+                            # Update filter summary with intersection result
+                            and_summary = f" -> {len(current_nodes)} after AND"
+                            if current_edges:
+                                and_summary += f", {len(current_edges)} edges"
+                            filter_messages[-1] += and_summary
+
+                        # If no nodes remain after intersection, continue to show all filter executions
+                        # but subsequent filters will have empty intersection results
+                        if len(current_nodes) == 0:
+                            # Don't break - continue executing remaining filters for complete logging
+                            pass
+
+                    except Exception as filter_error:
+                        error_msg = f"Filter {i+1} execution failed: {str(filter_error)}"
+                        self.logger.error(error_msg, exc_info=True)
+                        return False, {}, error_msg
+
+            # Build final message
+            filter_msg_summary = "; ".join(filter_messages)
             
-            # Build return data - include edges if not empty
-            return_data = {"nodes": nodes_raw}
-            if edges_raw:
-                return_data["edges"] = edges_raw
-                msg = f"Found {len(nodes_raw)} nodes and {len(edges_raw)} edges in graph '{graph_name}'{filter_msg}"
+            # Build return data
+            return_data = {"nodes": current_nodes or []}
+            if current_edges:
+                return_data["edges"] = current_edges
+                msg = f"Found {len(current_nodes or [])} nodes and {len(current_edges)} edges in graph '{graph_name}' ({filter_msg_summary})"
             else:
-                msg = f"Found {len(nodes_raw)} nodes in graph '{graph_name}'{filter_msg}"
+                msg = f"Found {len(current_nodes or [])} nodes in graph '{graph_name}' ({filter_msg_summary})"
             
             return True, return_data, msg
 
@@ -955,37 +1089,123 @@ class GraphDB:
             return False, "", error_msg
 
     def get_all_relations(self, graph_name: str, relations_filter=None) -> tuple[bool, dict, str]:
-        """Fetch all relations from the given graph with optional filtering.
+        """Fetch all relations from the given graph with optional multi-filter support.
+
+        This method supports complex filtering with multiple filters applied sequentially using AND logic.
+        Each filter is executed independently, then results are intersected to produce the final result.
+
+        Multi-Filter AND Logic:
+        - Filters are applied in the order provided
+        - Relation results: Intersection (AND) of all filter results by relation ID
+        - All filters are executed even if intermediate results are empty (for complete logging)
+        
+        OR Logic Within Filters:
+        - EQSTR operation: Multiple string values treated as OR (value1 OR value2 OR ...)
+        - EQ operation: Multiple numeric values treated as OR (value1 OR value2 OR ...)
+        - Other operations (GT, GTE, LT, LTE, RANGE): Single values only
+
         Args:
-            graph_name: Name of the graph to fetch from
-            relations_filter: Optional List[KnowledgeGraphQueryCriteriaFilter] for filtering (uses first element)
+            graph_name (str): Name of the graph to fetch from
+            relations_filter (Optional[List[KnowledgeGraphQueryCriteriaFilter]]): 
+                List of filters to apply sequentially with AND logic. If None or empty, 
+                returns all relations in the graph.
+
         Returns:
-            Tuple containing (success: bool, data: dict with 'relations' list, msg: str)
+            Tuple[bool, dict, str]: 
+                - success: True if operation succeeded, False otherwise
+                - data: Dictionary containing:
+                  * 'edges': List of relation dictionaries matching all filters
+                - message: Detailed message showing filter execution and results
+
+        Raises:
+            Exception: If database connection fails or query execution errors occur
         """
         try:
-            filter_element = relations_filter[0] if relations_filter and len(relations_filter) > 0 else None
-            success, query, error_msg = self._get_relations_filter_query(graph_name, filter_element)
-            if not success:
-                return False, {}, error_msg
+            # Start with all relations if no filters
+            if not relations_filter or len(relations_filter) == 0:
+                success, query, error_msg = self._get_relations_filter_query(graph_name, None)
+                if not success:
+                    return False, {}, error_msg
+                    
+                with self.connect_db.engine.connect() as conn:
+                    conn.exec_driver_sql(f'SET graph_path = "{graph_name}"')
+                    result = conn.exec_driver_sql(query).fetchone()
+                    relations_raw = [dict(r) for r in result[0]] if result and result[0] else []
+                    
+                msg = f"Found {len(relations_raw)} relations in graph '{graph_name}'"
+                return True, {"edges": relations_raw}, msg
+
+            # Apply filters sequentially with AND logic
+            current_relations = None
+            filter_messages = []
             
             with self.connect_db.engine.connect() as conn:
                 conn.exec_driver_sql(f'SET graph_path = "{graph_name}"')
-                relation_result = conn.exec_driver_sql(query).fetchone()
-                relations_raw = [dict(r) for r in relation_result[0]] if relation_result and relation_result[0] else []
-            
-            filter_msg = ""
-            if filter_element:
-                key = filter_element.key
-                operation = filter_element.operation
-                value = filter_element.value
                 
-                if operation == FilterOperation.RANGE:
-                    filter_msg = f" (filtered by {key} {operation} [{value[0]}, {value[1]}])"
-                else:
-                    filter_msg = f" (filtered by {key} {operation} {value[0]})"
+                for i, filter_element in enumerate(relations_filter):
+                    try:
+                        # Build query for this filter
+                        success, query, error_msg = self._get_relations_filter_query(graph_name, filter_element)
+                        if not success:
+                            error_msg = f"Filter {i+1} failed: {error_msg}"
+                            self.logger.error(error_msg)
+                            return False, {}, error_msg
+
+                        # Execute query
+                        result = conn.exec_driver_sql(query).fetchone()
+                        filter_relations = [dict(r) for r in result[0]] if result and result[0] else []
+
+                        # Create filter summary message
+                        key = filter_element.key
+                        operation = filter_element.operation
+                        value = filter_element.value
+                        
+                        if operation == "range":
+                            filter_summary = f"Filter {i+1}: {key} {operation} [{value[0]}, {value[1]}] -> {len(filter_relations)} relations"
+                        elif len(value) == 1:
+                            filter_summary = f"Filter {i+1}: {key} {operation} {value[0]} -> {len(filter_relations)} relations"
+                        else:
+                            # Multiple values - show all values
+                            filter_summary = f"Filter {i+1}: {key} {operation} {value} -> {len(filter_relations)} relations"
+                        
+                        filter_messages.append(filter_summary)
+
+                        # Apply AND logic: intersect with previous results
+                        if current_relations is None:
+                            # First filter - use results as-is
+                            current_relations = filter_relations
+                        else:
+                            # Subsequent filters - intersect by relation ID
+                            current_relation_ids = {rel.get('id') for rel in current_relations if 'id' in rel}
+                            filter_relation_ids = {rel.get('id') for rel in filter_relations if 'id' in rel}
+                            intersected_ids = current_relation_ids & filter_relation_ids
+                            
+                            # Keep only relations that exist in both sets
+                            current_relations = [rel for rel in current_relations if rel.get('id') in intersected_ids]
+                            
+                            # Update filter summary with intersection result
+                            filter_messages[-1] += f" -> {len(current_relations)} after AND"
+
+                        # If no relations remain after intersection, continue to show all filter executions
+                        # but subsequent filters will have empty intersection results
+                        if len(current_relations) == 0:
+                            # Don't break - continue executing remaining filters for complete logging
+                            pass
+
+                    except Exception as filter_error:
+                        error_msg = f"Filter {i+1} execution failed: {str(filter_error)}"
+                        self.logger.error(error_msg, exc_info=True)
+                        return False, {}, error_msg
+
+            # Build final message
+            filter_msg_summary = "; ".join(filter_messages)
             
-            msg = f"Found {len(relations_raw)} relations in graph '{graph_name}'{filter_msg}"
-            return True, {"edges": relations_raw}, msg
+            # Build return data
+            return_data = {"edges": current_relations or []}
+            msg = f"Found {len(current_relations or [])} relations in graph '{graph_name}' ({filter_msg_summary})"
+            
+            return True, return_data, msg
+
         except Exception as e:
             error_msg = f"Failed to fetch relations from graph '{graph_name}': {str(e)}"
             self.logger.error(error_msg, exc_info=True)

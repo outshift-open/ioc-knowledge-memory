@@ -437,8 +437,8 @@ class KnowledgeGraphQueryCriteriaFilter(BaseModel):
             # eqstr operation should only have string values
             if not all(isinstance(x, str) for x in v):
                 raise ValueError("eqstr operation requires string values only")
-            if len(v) != 1:
-                raise ValueError("eqstr operation requires exactly 1 value")
+            if len(v) < 1:
+                raise ValueError("eqstr operation requires at least 1 value")
         else:
             # All other operations should have non-string values (numeric)
             if any(isinstance(x, str) for x in v):
@@ -450,7 +450,12 @@ class KnowledgeGraphQueryCriteriaFilter(BaseModel):
                 # Ensure min <= max for numeric ranges
                 if v[0] > v[1]:
                     raise ValueError("Range: first value (min) must be <= second value (max)")
+            elif operation == FilterOperation.EQ:
+                # EQ operation supports multiple values for OR logic
+                if len(v) < 1:
+                    raise ValueError("eq operation requires at least 1 value")
             else:
+                # GT, GTE, LT, LTE operations require exactly 1 value
                 if len(v) != 1:
                     raise ValueError(f"Operation '{operation}' requires exactly 1 value")
         
@@ -523,12 +528,10 @@ class KnowledgeGraphQueryCriteria(BaseModel):
     
     @model_validator(mode="after")
     def validate_filter_count(self) -> "KnowledgeGraphQueryCriteria":
-        """Validate that filters contains only a single filter entry."""
+        """Validate that filters list is not empty if provided."""
         if self.filters is not None:
             if len(self.filters) == 0:
                 raise ValueError("Unsupported: filters list cannot be empty")
-            elif len(self.filters) > 1:
-                raise ValueError("Unsupported: only a single KnowledgeGraphQueryCriteriaFilter entry is allowed in the list")
         
         return self
     

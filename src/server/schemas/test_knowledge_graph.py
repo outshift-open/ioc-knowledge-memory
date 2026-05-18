@@ -686,7 +686,7 @@ class TestKnowledgeGraphQueryCriteriaFilter:
             )
 
     def test_filter_eqstr_operation_validation(self):
-        """Test that EQSTR operation only accepts string values and exactly 1 value."""
+        """Test that EQSTR operation accepts string values (single or multiple for OR logic)."""
         # Valid: single string value
         filter_obj = KnowledgeGraphQueryCriteriaFilter(
             category=FilterCategory.CUSTOM,
@@ -696,14 +696,14 @@ class TestKnowledgeGraphQueryCriteriaFilter:
         )
         assert filter_obj.value == ["single_string"]
 
-        # Invalid: multiple values with EQSTR
-        with pytest.raises(ValidationError, match="eqstr operation requires exactly 1 value"):
-            KnowledgeGraphQueryCriteriaFilter(
-                category=FilterCategory.CUSTOM,
-                key="name",
-                operation=FilterOperation.EQSTR,
-                value=["string1", "string2"]
-            )
+        # Valid: multiple string values for OR logic
+        filter_obj_multiple = KnowledgeGraphQueryCriteriaFilter(
+            category=FilterCategory.CUSTOM,
+            key="name",
+            operation=FilterOperation.EQSTR,
+            value=["string1", "string2", "string3"]
+        )
+        assert filter_obj_multiple.value == ["string1", "string2", "string3"]
 
         # Invalid: numeric values with EQSTR
         with pytest.raises(ValidationError, match="eqstr operation requires string values only"):
@@ -712,6 +712,35 @@ class TestKnowledgeGraphQueryCriteriaFilter:
                 key="numeric_prop",
                 operation=FilterOperation.EQSTR,
                 value=[42, 100]
+            )
+
+    def test_filter_eq_operation_validation(self):
+        """Test that EQ operation accepts numeric values (single or multiple for OR logic)."""
+        # Valid: single numeric value
+        filter_obj = KnowledgeGraphQueryCriteriaFilter(
+            category=FilterCategory.CUSTOM,
+            key="age",
+            operation=FilterOperation.EQ,
+            value=[25]
+        )
+        assert filter_obj.value == [25]
+
+        # Valid: multiple numeric values for OR logic
+        filter_obj_multiple = KnowledgeGraphQueryCriteriaFilter(
+            category=FilterCategory.CUSTOM,
+            key="age",
+            operation=FilterOperation.EQ,
+            value=[25, 30, 35]
+        )
+        assert filter_obj_multiple.value == [25, 30, 35]
+
+        # Invalid: string values with EQ
+        with pytest.raises(ValidationError, match="Operation 'FilterOperation.EQ' requires non-string values \\(numeric only\\)"):
+            KnowledgeGraphQueryCriteriaFilter(
+                category=FilterCategory.DYNAMIC,
+                key="numeric_prop",
+                operation=FilterOperation.EQ,
+                value=["string1", "string2"]
             )
 
     def test_filter_numeric_operations_validation(self):
