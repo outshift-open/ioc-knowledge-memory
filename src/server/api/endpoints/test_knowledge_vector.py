@@ -953,3 +953,183 @@ class TestAgentIdPassedThroughToDatabase:
         mock_db_instance.query.assert_called_once()
         call_args = mock_db_instance.query.call_args[0][0]
         assert call_args.agent_id == "agent-xyz"
+
+
+class TestDeleteByFilters:
+    """Tests for delete by metadata filters functionality."""
+
+    @patch("server.services.knowledge_vector.VectorDB")
+    @patch("server.services.knowledge_vector.KnowledgeVectorService._mas_exists")
+    def test_delete_by_single_filter(self, mock_mas_exists, mock_vector_db_class):
+        """Test delete by a single metadata filter (data_source)."""
+        mock_mas_exists.return_value = True
+        mock_db_instance = mock_vector_db_class.return_value
+        mock_db_instance.delete_vectors_by_filter.return_value = 3
+
+        request = {
+            "request_id": "test-request-id",
+            "wksp_id": "test-wksp",
+            "mas_id": "test-mas",
+            "filters": {"data_source": "memory-123"},
+        }
+        response = test_client.request("DELETE", "/knowledge/vector", json=request)
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["deleted_count"] == 3
+        mock_db_instance.delete_vectors_by_filter.assert_called_once()
+
+    @patch("server.services.knowledge_vector.VectorDB")
+    @patch("server.services.knowledge_vector.KnowledgeVectorService._mas_exists")
+    def test_delete_by_multiple_filters(self, mock_mas_exists, mock_vector_db_class):
+        """Test delete by multiple metadata filters (AND logic)."""
+        mock_mas_exists.return_value = True
+        mock_db_instance = mock_vector_db_class.return_value
+        mock_db_instance.delete_vectors_by_filter.return_value = 2
+
+        request = {
+            "request_id": "test-request-id",
+            "wksp_id": "test-wksp",
+            "mas_id": "test-mas",
+            "filters": {
+                "data_source": "memory-123",
+                "doc_index": 5,
+            },
+        }
+        response = test_client.request("DELETE", "/knowledge/vector", json=request)
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["deleted_count"] == 2
+        call_kwargs = mock_db_instance.delete_vectors_by_filter.call_args[1]
+        assert call_kwargs["metadata_filter"]["data_source"] == "memory-123"
+        assert call_kwargs["metadata_filter"]["doc_index"] == 5
+
+    @patch("server.services.knowledge_vector.VectorDB")
+    @patch("server.services.knowledge_vector.KnowledgeVectorService._mas_exists")
+    def test_delete_by_extra_filters(self, mock_mas_exists, mock_vector_db_class):
+        """Test delete by extra_filters for arbitrary key-value pairs."""
+        mock_mas_exists.return_value = True
+        mock_db_instance = mock_vector_db_class.return_value
+        mock_db_instance.delete_vectors_by_filter.return_value = 1
+
+        request = {
+            "request_id": "test-request-id",
+            "wksp_id": "test-wksp",
+            "mas_id": "test-mas",
+            "filters": {
+                "extra_filters": {
+                    "session_id": "abc123",
+                    "mycelium_knowledge_key": "user-prefs",
+                }
+            },
+        }
+        response = test_client.request("DELETE", "/knowledge/vector", json=request)
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["deleted_count"] == 1
+        call_kwargs = mock_db_instance.delete_vectors_by_filter.call_args[1]
+        assert call_kwargs["metadata_filter"]["extra_filters"]["session_id"] == "abc123"
+        assert call_kwargs["metadata_filter"]["extra_filters"]["mycelium_knowledge_key"] == "user-prefs"
+
+    def test_delete_returns_422_when_both_id_and_filters_provided(self):
+        """Test that providing both id and filters returns 400."""
+        request = {
+            "request_id": "test-request-id",
+            "wksp_id": "test-wksp",
+            "mas_id": "test-mas",
+            "id": "some-id",
+            "filters": {"data_source": "memory-123"},
+        }
+        response = test_client.request("DELETE", "/knowledge/vector", json=request)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_delete_returns_422_when_neither_id_nor_filters_provided(self):
+        """Test that providing neither id nor filters returns 400 (validation error)."""
+        request = {
+            "request_id": "test-request-id",
+            "wksp_id": "test-wksp",
+            "mas_id": "test-mas",
+        }
+        response = test_client.request("DELETE", "/knowledge/vector", json=request)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_delete_returns_422_when_filters_empty(self):
+        """Test that providing filters with no actual filter values returns 400 (validation error)."""
+        request = {
+            "request_id": "test-request-id",
+            "wksp_id": "test-wksp",
+            "mas_id": "test-mas",
+            "filters": {},
+        }
+        response = test_client.request("DELETE", "/knowledge/vector", json=request)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    @patch("server.services.knowledge_vector.VectorDB")
+    @patch("server.services.knowledge_vector.KnowledgeVectorService._mas_exists")
+    def test_delete_by_id_still_works(self, mock_mas_exists, mock_vector_db_class):
+        """Test that delete by id (existing behavior) still works."""
+        mock_mas_exists.return_value = True
+        mock_db_instance = mock_vector_db_class.return_value
+        mock_db_instance.delete_vector.return_value = True
+
+        request = {
+            "request_id": "test-request-id",
+            "wksp_id": "test-wksp",
+            "mas_id": "test-mas",
+            "id": "vec-123",
+        }
+        response = test_client.request("DELETE", "/knowledge/vector", json=request)
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["deleted_count"] == 1
+        mock_db_instance.delete_vector.assert_called_once()
+
+    @patch("server.services.knowledge_vector.VectorDB")
+    @patch("server.services.knowledge_vector.KnowledgeVectorService._mas_exists")
+    def test_delete_by_filters_with_agent_id(self, mock_mas_exists, mock_vector_db_class):
+        """Test that agent_id is passed through for filter-based deletes."""
+        mock_mas_exists.return_value = True
+        mock_db_instance = mock_vector_db_class.return_value
+        mock_db_instance.delete_vectors_by_filter.return_value = 5
+
+        request = {
+            "request_id": "test-request-id",
+            "wksp_id": "test-wksp",
+            "mas_id": "test-mas",
+            "agent_id": "agent-abc",
+            "filters": {"data_source": "memory-123"},
+        }
+        response = test_client.request("DELETE", "/knowledge/vector", json=request)
+
+        assert response.status_code == status.HTTP_200_OK
+        call_kwargs = mock_db_instance.delete_vectors_by_filter.call_args[1]
+        assert call_kwargs["agent_id"] == "agent-abc"
+
+    @patch("server.services.knowledge_vector.VectorDB")
+    @patch("server.services.knowledge_vector.KnowledgeVectorService._mas_exists")
+    def test_delete_by_filters_hard_delete(self, mock_mas_exists, mock_vector_db_class):
+        """Test hard delete by filters."""
+        mock_mas_exists.return_value = True
+        mock_db_instance = mock_vector_db_class.return_value
+        mock_db_instance.delete_vectors_by_filter.return_value = 2
+
+        request = {
+            "request_id": "test-request-id",
+            "wksp_id": "test-wksp",
+            "mas_id": "test-mas",
+            "filters": {"data_source": "memory-123"},
+            "soft_delete": False,
+        }
+        response = test_client.request("DELETE", "/knowledge/vector", json=request)
+
+        assert response.status_code == status.HTTP_200_OK
+        call_kwargs = mock_db_instance.delete_vectors_by_filter.call_args[1]
+        assert call_kwargs["soft_delete"] is False

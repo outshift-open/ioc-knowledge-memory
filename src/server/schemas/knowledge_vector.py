@@ -231,13 +231,52 @@ class KnowledgeVectorStoreResponse(BaseModel):
 # Deletion models
 
 
+class DeleteMetadataFilter(BaseModel):
+    """Metadata filters for bulk delete operations.
+
+    Supports filtering by known metadata fields plus arbitrary key-value pairs
+    via extra_filters for extensibility (e.g., session_id, mycelium_knowledge_key).
+    """
+
+    doc_index: Optional[int] = Field(default=None, description="Filter by doc_index (integer equality)")
+    chunk_index: Optional[int] = Field(default=None, description="Filter by chunk_index (integer equality)")
+    data_source: Optional[str] = Field(default=None, description="Filter by data_source (string equality)")
+    recorded_at_from: Optional[str] = Field(
+        default=None, description="Filter recorded_at >= this value (ISO 8601)"
+    )
+    recorded_at_to: Optional[str] = Field(
+        default=None, description="Filter recorded_at < this value (ISO 8601)"
+    )
+    extra_filters: Optional[Dict[str, str]] = Field(
+        default=None, description="Arbitrary key-value filters on metadata (string equality)"
+    )
+
+    def has_any_filter(self) -> bool:
+        """Check if at least one filter is set."""
+        if self.doc_index is not None:
+            return True
+        if self.chunk_index is not None:
+            return True
+        if self.data_source is not None:
+            return True
+        if self.recorded_at_from is not None:
+            return True
+        if self.recorded_at_to is not None:
+            return True
+        if self.extra_filters:
+            return True
+        return False
+
+
 class KnowledgeVectorDeleteRequest(BaseModel):
     """
-    Represents a request to delete a store.
+    Represents a request to delete vectors.
 
-    Attributes:
-        request_id: UUID for request tracking
-        records: Dictionary containing 'vectors' keys with ids
+    Supports two modes:
+    - Delete by ID: provide 'id' field for single vector deletion
+    - Delete by filter: provide 'filters' field for bulk deletion by metadata
+
+    Must provide exactly one of 'id' or 'filters'.
     """
 
     request_id: str = Field(
@@ -247,8 +286,11 @@ class KnowledgeVectorDeleteRequest(BaseModel):
     wksp_id: str = Field(min_length=1, description="The workspace ID for the request")
     mas_id: str = Field(min_length=1, description="ID for the Multi-Agent System")
     agent_id: Optional[str] = Field(default=None, description="Optional agent ID for agent-scoped deletion")
-    id: str = Field(min_length=1, description="ID of vector to delete")
-    soft_delete: bool = Field(default=True, description="Soft delete the vector")
+    id: Optional[str] = Field(default=None, description="ID of vector to delete (for single deletion)")
+    filters: Optional[DeleteMetadataFilter] = Field(
+        default=None, description="Metadata filters for bulk deletion"
+    )
+    soft_delete: bool = Field(default=True, description="Soft delete the vector(s)")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -258,16 +300,35 @@ class KnowledgeVectorDeleteRequest(BaseModel):
                     "wksp_id": "123e4567-e89b-12d3-a456-426614174001",
                     "mas_id": "223e4567-e89b-12d3-a456-426614174001",
                     "id": "123e4567-e89b-12d3-a456-426614174001",
-                }
+                },
+                {
+                    "request_id": "ccd3feb1-6f7d-5dg0-c8c5-gf7519d152b1",
+                    "wksp_id": "123e4567-e89b-12d3-a456-426614174001",
+                    "mas_id": "223e4567-e89b-12d3-a456-426614174001",
+                    "filters": {"data_source": "memory-123"},
+                },
             ]
         }
     )
 
     @model_validator(mode="after")
-    def validate_mas_and_wksp_id(self) -> "KnowledgeVectorDeleteRequest":
-        """Validate that both mas_id or wksp_id is provided."""
+    def validate_request(self) -> "KnowledgeVectorDeleteRequest":
+        """Validate that mas_id/wksp_id are provided and exactly one of id/filters is set."""
         if not self.mas_id or not self.wksp_id:
             raise ValueError("Both 'mas_id' and 'wksp_id' must be provided")
+
+        has_id = self.id is not None and self.id != ""
+        has_filters = self.filters is not None
+
+        if has_id and has_filters:
+            raise ValueError("Provide either 'id' or 'filters', not both")
+        if not has_id and not has_filters:
+            raise ValueError("Must provide either 'id' or 'filters'")
+
+        # If filters provided, ensure at least one filter is set
+        if has_filters and not self.filters.has_any_filter():
+            raise ValueError("At least one filter must be set in 'filters'")
+
         return self
 
 
@@ -279,6 +340,7 @@ class KnowledgeVectorDeleteResponse(BaseModel):
         request_id: UUID for request tracking
         status: Status of the request
         message: Optional message providing additional information
+        deleted_count: Number of vectors deleted (for filter-based deletes)
     """
 
     model_config = ConfigDict(exclude_none=True)
@@ -286,6 +348,7 @@ class KnowledgeVectorDeleteResponse(BaseModel):
     request_id: Optional[str] = Field(None, description="UUID for request tracking")
     status: ResponseStatus = Field(..., description="Status of the request")
     message: Optional[str] = Field(None, description="Optional message providing additional information")
+    deleted_count: Optional[int] = Field(None, description="Number of vectors deleted")
 
     def model_dump(self, **kwargs) -> Dict[str, Any]:
         """Override model_dump to ensure exclude_none is always applied."""

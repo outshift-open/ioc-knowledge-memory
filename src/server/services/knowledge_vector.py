@@ -293,17 +293,22 @@ class KnowledgeVectorService:
 
     def delete_vector_store(self, data: KnowledgeVectorDeleteRequest) -> KnowledgeVectorDeleteResponse:
         """
-        Delete a vector record from the vector store.
+        Delete vector(s) from the vector store.
+
+        Supports two modes:
+        - Delete by ID: single vector deletion when data.id is provided
+        - Delete by filter: bulk deletion when data.filters is provided
 
         Args:
-            data: Delete request containing record ID and delete options
+            data: Delete request containing either record ID or metadata filters
 
         Returns:
-            KnowledgeVectorDeleteResponse: Response indicating success or failure
+            KnowledgeVectorDeleteResponse: Response indicating success or failure with deleted_count
         """
         request_id = data.request_id
         self.logger.info(
-            f"Deleting vector: request_id='{request_id}' wksp_id='{data.wksp_id}' mas_id='{data.mas_id}' id='{data.id}' soft_delete={data.soft_delete}"
+            f"Deleting vector(s): request_id='{request_id}' wksp_id='{data.wksp_id}' mas_id='{data.mas_id}' "
+            f"id='{data.id}' filters={data.filters} soft_delete={data.soft_delete}"
         )
 
         try:
@@ -322,28 +327,55 @@ class KnowledgeVectorService:
             # Initialize database connection
             db = VectorDB()
 
-            # Perform delete operation
-            delete_success = db.delete_vector(
-                schema_name=schema_name,
-                vector_id=data.id,
-                wksp_id=data.wksp_id,
-                mas_id=data.mas_id,
-                soft_delete=data.soft_delete,
-                agent_id=data.agent_id,
-            )
+            delete_type = "soft deleted" if data.soft_delete else "permanently deleted"
 
-            if delete_success:
-                delete_type = "soft deleted" if data.soft_delete else "permanently deleted"
-                self.logger.info(f"Successfully {delete_type} vector {data.id} for request: {request_id}")
+            # Branch based on delete mode: by ID or by filters
+            if data.id:
+                # Single vector deletion by ID
+                delete_success = db.delete_vector(
+                    schema_name=schema_name,
+                    vector_id=data.id,
+                    wksp_id=data.wksp_id,
+                    mas_id=data.mas_id,
+                    soft_delete=data.soft_delete,
+                    agent_id=data.agent_id,
+                )
+
+                if delete_success:
+                    self.logger.info(f"Successfully {delete_type} vector {data.id} for request: {request_id}")
+                    return KnowledgeVectorDeleteResponse(
+                        request_id=request_id,
+                        status=ResponseStatus.SUCCESS,
+                        message=f"Successfully {delete_type} vector {data.id}",
+                        deleted_count=1,
+                    )
+                else:
+                    self.logger.warning(f"Vector {data.id} not found for deletion in request: {request_id}")
+                    return KnowledgeVectorDeleteResponse(
+                        request_id=request_id,
+                        status=ResponseStatus.NOT_FOUND,
+                        message=f"Vector {data.id} not found",
+                        deleted_count=0,
+                    )
+            else:
+                # Bulk deletion by filters
+                metadata_filter = data.filters.model_dump(exclude_none=True) if data.filters else {}
+
+                deleted_count = db.delete_vectors_by_filter(
+                    schema_name=schema_name,
+                    wksp_id=data.wksp_id,
+                    mas_id=data.mas_id,
+                    metadata_filter=metadata_filter,
+                    soft_delete=data.soft_delete,
+                    agent_id=data.agent_id,
+                )
+
+                self.logger.info(f"Successfully {delete_type} {deleted_count} vectors for request: {request_id}")
                 return KnowledgeVectorDeleteResponse(
                     request_id=request_id,
                     status=ResponseStatus.SUCCESS,
-                    message=f"Successfully {delete_type} vector {data.id}",
-                )
-            else:
-                self.logger.warning(f"Vector {data.id} not found for deletion in request: {request_id}")
-                return KnowledgeVectorDeleteResponse(
-                    request_id=request_id, status=ResponseStatus.NOT_FOUND, message=f"Vector {data.id} not found"
+                    message=f"Successfully {delete_type} {deleted_count} vectors",
+                    deleted_count=deleted_count,
                 )
 
         except Exception as e:

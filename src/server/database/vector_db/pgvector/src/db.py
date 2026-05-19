@@ -666,3 +666,94 @@ class VectorDB:
         except SQLAlchemyError as e:
             self.logger.error(f"Failed to delete vector {vector_id}: {str(e)}")
             raise RuntimeError(f"Failed to delete vector: {str(e)}")
+
+    def delete_vectors_by_filter(
+        self,
+        schema_name: str,
+        wksp_id: str,
+        mas_id: str,
+        metadata_filter: Dict,
+        soft_delete: bool = True,
+        agent_id: Optional[str] = None,
+    ) -> int:
+        """
+        Delete vectors matching metadata filters.
+
+        Args:
+            schema_name: Name of the schema containing the table
+            wksp_id: Workspace ID to scope deletion
+            mas_id: MAS ID to scope deletion
+            metadata_filter: Dict with filter criteria (doc_index, chunk_index, data_source,
+                            recorded_at_from, recorded_at_to, extra_filters)
+            soft_delete: If True, perform soft delete; if False, perform hard delete
+            agent_id: Optional agent ID to scope deletion
+
+        Returns:
+            int: Number of deleted records
+
+        Raises:
+            RuntimeError: If there's an error executing the delete operation
+        """
+        try:
+            table_name = f'"{schema_name}"."{TABLE_NAME}"'
+
+            # Build base params
+            params: Dict = {"wksp_id": wksp_id, "mas_id": mas_id}
+
+            # Build filter clauses (reuse pattern from similarity_search)
+            filter_clauses = ""
+
+            if agent_id is not None:
+                filter_clauses += " AND agent_id = :agent_id"
+                params["agent_id"] = agent_id
+
+            if metadata_filter:
+                if metadata_filter.get("doc_index") is not None:
+                    filter_clauses += " AND (metadata->>'doc_index')::INTEGER = :doc_index"
+                    params["doc_index"] = metadata_filter["doc_index"]
+                if metadata_filter.get("chunk_index") is not None:
+                    filter_clauses += " AND (metadata->>'chunk_index')::INTEGER = :chunk_index"
+                    params["chunk_index"] = metadata_filter["chunk_index"]
+                if metadata_filter.get("data_source") is not None:
+                    filter_clauses += " AND metadata->>'data_source' = :data_source"
+                    params["data_source"] = metadata_filter["data_source"]
+                if metadata_filter.get("recorded_at_from") is not None:
+                    filter_clauses += " AND (metadata->>'recorded_at')::TIMESTAMPTZ >= :ts_from"
+                    params["ts_from"] = metadata_filter["recorded_at_from"]
+                if metadata_filter.get("recorded_at_to") is not None:
+                    filter_clauses += " AND (metadata->>'recorded_at')::TIMESTAMPTZ < :ts_to"
+                    params["ts_to"] = metadata_filter["recorded_at_to"]
+
+                # Handle extra_filters for arbitrary key-value pairs
+                extra_filters = metadata_filter.get("extra_filters")
+                if extra_filters:
+                    for i, (key, value) in enumerate(extra_filters.items()):
+                        param_name = f"extra_{i}"
+                        filter_clauses += f" AND metadata->>'{key}' = :{param_name}"
+                        params[param_name] = value
+
+            with self.connect_db.engine.begin() as conn:
+                if soft_delete:
+                    query = f"""
+                        UPDATE {table_name}
+                        SET deleted_at = now(), deleted_by = current_user, updated_at = now(), updated_by = current_user
+                        WHERE wksp_uuid = :wksp_id AND mas_uuid = :mas_id AND deleted_at IS NULL{filter_clauses}
+                    """
+                    self.logger.info(f"Performing soft delete by filter in {table_name} (wksp_id={wksp_id}, mas_id={mas_id}, agent_id={agent_id}, filters={metadata_filter})")
+                else:
+                    query = f"""
+                        DELETE FROM {table_name}
+                        WHERE wksp_uuid = :wksp_id AND mas_uuid = :mas_id{filter_clauses}
+                    """
+                    self.logger.info(f"Performing hard delete by filter in {table_name} (wksp_id={wksp_id}, mas_id={mas_id}, agent_id={agent_id}, filters={metadata_filter})")
+
+                result = conn.execute(text(query), params)
+                rows_affected = result.rowcount
+
+                delete_type = "soft deleted" if soft_delete else "permanently deleted"
+                self.logger.info(f"Successfully {delete_type} {rows_affected} vectors from {table_name}")
+                return rows_affected
+
+        except SQLAlchemyError as e:
+            self.logger.error(f"Failed to delete vectors by filter: {str(e)}")
+            raise RuntimeError(f"Failed to delete vectors by filter: {str(e)}")
