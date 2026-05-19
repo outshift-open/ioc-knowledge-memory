@@ -19,11 +19,12 @@ WORKDIR /tmp/pgvector
 RUN make USE_PGXS=1 OPTFLAGS=""
 RUN make USE_PGXS=1 install
 
-# Build TimescaleDB
+# Build TimescaleDB with Community license (enables compression + retention)
+# Changed: Removed -DAPACHE_ONLY=1 flag to enable TimescaleDB Community features
 WORKDIR /tmp
 RUN git clone --branch 2.17.2 https://github.com/timescale/timescaledb.git
 WORKDIR /tmp/timescaledb
-RUN ./bootstrap -DREGRESS_CHECKS=OFF -DTAP_CHECKS=OFF -DWARNINGS_AS_ERRORS=OFF -DAPACHE_ONLY=1
+RUN ./bootstrap -DREGRESS_CHECKS=OFF -DTAP_CHECKS=OFF -DWARNINGS_AS_ERRORS=OFF
 WORKDIR /tmp/timescaledb/build
 RUN make
 RUN make install
@@ -35,7 +36,7 @@ FROM skaiworldwide/agensgraph:v2.16.0-alpine3.22
 COPY --from=builder /usr/local/lib/postgresql/vector.so /usr/local/lib/postgresql/
 COPY --from=builder /usr/local/share/postgresql/extension/vector* /usr/local/share/postgresql/extension/
 
-# Copy compiled TimescaleDB extension from builder
+# Copy compiled TimescaleDB extension from builder (now with Community features)
 COPY --from=builder /usr/local/lib/postgresql/timescaledb*.so /usr/local/lib/postgresql/
 COPY --from=builder /usr/local/share/postgresql/extension/timescaledb* /usr/local/share/postgresql/extension/
 
