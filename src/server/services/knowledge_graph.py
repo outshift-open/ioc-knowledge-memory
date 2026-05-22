@@ -71,7 +71,7 @@ class KnowledgeGraphService:
                             message=f"Relations reference node IDs not found in graph: {', '.join(sorted(not_found))}",
                         )
 
-            save_result, msg = db.save(graph=graph, nodes=nodes, edges=edges, force_replace=data.force_replace)
+            save_result, msg = db.save(graph=graph, nodes=nodes, edges=edges, force_replace=data.force_replace, incremental_update=data.incremental_update)
 
             if save_result:
                 response = KnowledgeGraphStoreResponse(

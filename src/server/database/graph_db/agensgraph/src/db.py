@@ -362,7 +362,7 @@ class GraphDB:
             self.logger.error(error_msg, exc_info=True)
             raise RuntimeError(error_msg)
 
-    def save(self, graph: str, nodes=None, edges=None, force_replace=False):
+    def save(self, graph: str, nodes=None, edges=None, force_replace=False, incremental_update=False):
         """
         Save nodes and edges in a single transaction using AgensGraph.
         Creates the graph if it doesn't exist and checks for node existence before creating them.
@@ -372,6 +372,7 @@ class GraphDB:
             nodes: List of Node objects
             edges: List of Edge objects
             force_replace: bool - if True, force replace existing nodes and edges
+            incremental_update: bool - if True, allows incremental updates where relations may reference existing nodes
 
         Returns:
             tuple: (success: bool, message: str)
@@ -438,12 +439,36 @@ class GraphDB:
                             f"Force replace enabled, deleting existing nodes {existing_nodes} and edges {existing_edges}"
                         )
                         nodes_to_delete = [n for n in nodes if n.id in existing_nodes] if nodes else []
+                        deleted_node_ids = set()
+                        
                         # delete nodes and associated edges
                         for node in nodes_to_delete or []:
                             query, params = node.to_cypher_delete()
                             self.logger.debug(f"Cypher: {node.to_executable_cypher_with_params(query, params)}")
                             conn.exec_driver_sql(query, params)
+                            deleted_node_ids.add(node.id)
                             self.logger.info(f"Node {node.id} and associated edges deleted")
+                        
+                        # Delete remaining existing edges that weren't deleted with nodes
+                        # Only delete edges if their connected nodes weren't already deleted
+                        if incremental_update and edges:
+                            edges_to_delete = []
+                            for edge in edges:
+                                if edge.id in existing_edges:
+                                    # Check if edge's nodes were already deleted
+                                    edge_nodes_deleted = (
+                                        hasattr(edge, 'start_node_id') and edge.start_node_id in deleted_node_ids or
+                                        hasattr(edge, 'end_node_id') and edge.end_node_id in deleted_node_ids
+                                    )
+                                    if not edge_nodes_deleted:
+                                        edges_to_delete.append(edge)
+                            
+                            for edge in edges_to_delete:
+                                query, params = edge.to_cypher_delete()
+                                self.logger.debug(f"Deleting edge {edge.id}: {query}")
+                                conn.exec_driver_sql(query, params)
+                                self.logger.info(f"Edge {edge.id} deleted")
+                        
 
                     # Process nodes
                     for node in nodes or []:
