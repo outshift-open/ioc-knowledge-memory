@@ -19,8 +19,7 @@ permissions:
 jobs:
   build-and-push-db:
     name: Build & Push DB Image
-    runs-on:
-      group: ${{ vars.DEFAULT_ARC_RUNNERS }}
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -47,6 +46,6 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ghcr.io/cisco-eti/ioc-knowledge-memory-svc-db:${{ inputs.image-tag }}
+            ghcr.io/${{ github.repository_owner }}/ioc-knowledge-memory-svc-db:${{ inputs.image-tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
