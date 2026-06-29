@@ -7,7 +7,7 @@ info:
     This service supports:
     - **Knowledge Graph Storage**: Store and query concepts and relationships in a graph database
     - **Vector Storage**: Store and query vector embeddings (coming soon)
-    - **Key-Value Pair Storage**: Store and query structured data (coming soon)
+    - **Key-Value Pair Storage**: Store and query structured data with JSON keys and values
     
     The service is designed to support Multi-Agent Systems (MAS) with workspace-based data isolation and supports different memory types (Semantic, Procedural, Episodic).
   version: "1.0.0"
@@ -22,13 +22,13 @@ tags:
   - name: knowledge-vector
     description: Vector-based knowledge storage and querying operations
   - name: knowledge-kvp
-    description: Key-value pair knowledge storage and querying operations (not implemented)
+    description: Key-value pair knowledge storage and querying operations
   - name: internal-knowledge-graph
     description: Internal graph-based knowledge operations
   - name: internal-knowledge-vector
     description: Internal vector-based knowledge operations
   - name: internal-knowledge-kvp
-    description: Internal key-value pair knowledge operations (not implemented)
+    description: Internal key-value pair knowledge operations
   - name: health
     description: Service health and monitoring endpoints
 
@@ -274,6 +274,56 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/KnowledgeGraphDeleteResponse'
+              example:
+                request_id: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+                status: "failure"
+                message: "Internal service error - unable to process delete request"
+
+  # Internal Knowledge KVP endpoints
+  /internal/knowledge/kvps/stores/{store_id}:
+    delete:
+      tags:
+        - internal-knowledge-kvp
+      summary: Internal Delete KVP Store
+      description: Internal method to hard delete a KVP store schema and all associated data
+      operationId: internal_delete_kvp_store
+      parameters:
+        - name: store_id
+          in: path
+          required: true
+          description: Unique identifier for the KVP store
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeKVPStoreOnboardDeleteRequest'
+      responses:
+        '200':
+          description: Knowledge KVP data successfully deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeKVPStoreOnboardResponse'
+        '400':
+          description: Bad request - validation error (missing required fields, invalid data format, or business logic validation failure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeKVPStoreOnboardResponse'
+              example:
+                request_id: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+                status: "validation error"
+                message: "Request validation failed: mas_id: field required"
+        '500':
+          description: Internal server error - unexpected system failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeKVPStoreOnboardResponse'
               example:
                 request_id: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
                 status: "failure"
@@ -525,37 +575,77 @@ paths:
               schema:
                 $ref: '#/components/schemas/KnowledgeVectorQueryResponse'
 
-  # Knowledge KVP endpoints (not implemented)
-  /knowledge/kvps:
+  # Knowledge KVP endpoints
+  /knowledge/kvps/stores/{store_id}:
     post:
       tags:
         - knowledge-kvp
-      summary: Create or update KVP knowledge store
-      description: KVP knowledge store creation (not yet implemented)
-      operationId: createKvpStore
+      summary: Onboard KVP Store
+      description: Creates essential entities for the key-value pair store to function and provides partitioning by workspace.
+      operationId: onboard_kvp_store
+      parameters:
+        - name: store_id
+          in: path
+          required: true
+          description: Unique identifier for the KVP store
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeKVPStoreOnboardRequest'
       responses:
-        '501':
-          description: Not implemented
+        '201':
+          description: Knowledge KVP store onboarded successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
-                    example: "KVP knowledge store creation is not yet implemented"
+                $ref: '#/components/schemas/KnowledgeKVPStoreOnboardResponse'
+        '400':
+          description: Bad request - validation error (missing required fields, invalid data format, or business logic validation failure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeKVPStoreOnboardResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeKVPStoreOnboardResponse'
         '500':
-          description: Internal server error
+          description: Internal server error - unexpected system failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeKVPStoreOnboardResponse'
 
     delete:
       tags:
         - knowledge-kvp
-      summary: Delete KVP knowledge store
-      description: KVP knowledge store deletion (not yet implemented)
-      operationId: deleteKvpStore
+      summary: Delete KVP Store (Not Implemented)
+      description: Delete a partition of the key-value pair knowledge store and associated entities created during onboarding of the store. Currently supported as an internal API only.
+      operationId: onboard_kvp_store_delete
+      parameters:
+        - name: store_id
+          in: path
+          required: true
+          description: Unique identifier for the KVP store
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeKVPStoreOnboardDeleteRequest'
       responses:
         '501':
-          description: Not implemented
+          description: Not implemented - KVP knowledge store deletion is currently supported as an internal API
           content:
             application/json:
               schema:
@@ -563,30 +653,161 @@ paths:
                 properties:
                   detail:
                     type: string
-                    example: "KVP knowledge store deletion is not yet implemented"
+                    example: "KVP knowledge store deletion is currently supported as an *internal API*"
+
+  /knowledge/kvps:
+    post:
+      tags:
+        - knowledge-kvp
+      summary: Upsert KVP Data
+      description: Upsert key-value pairs in the KVP knowledge store. Either all records are upserted or none (runs as a transaction).
+      operationId: upsert_kvp_store
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeKVPStoreRequest'
+            examples:
+              episodic_data:
+                summary: Store user session data
+                value:
+                  request_id: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+                  wksp_id: "9f136aa0-143c-46a6-82f2-249eac489e52"
+                  mas_id: "223e4567-e89b-12d3-a456-426614174001"
+                  agent_id: "agent-001"
+                  records:
+                    - key: {"episode_id": "12345"}
+                      value: {"name": "John Doe", "preferences": {"theme": "dark", "language": "en"}, "last_login": 1640995200}
+                    - key: {"episode_id": "67890"}
+                      value: {"name": "Jane Smith", "preferences": {"theme": "light", "language": "es"}, "last_login": 1640995300}
+      responses:
+        '201':
+          description: Knowledge KVP data successfully created/updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeKVPStoreResponse'
+              example:
+                request_id: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+                status: "success"
+                message: "KVP data stored successfully"
+        '400':
+          description: Bad request - validation error (missing required fields, invalid data format, multiple keys exist in store for provided key or business logic validation failure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeKVPStoreResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeKVPStoreResponse'
         '500':
-          description: Internal server error
+          description: Internal server error - unexpected system failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeKVPStoreResponse'
+
+    delete:
+      tags:
+        - knowledge-kvp
+      summary: Delete KVP Entity
+      description: Delete a key-value pair from the KVP knowledge store
+      operationId: delete_kvp_store
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeKVPDeleteRequest'
+      responses:
+        '200':
+          description: Knowledge KVP data successfully deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeKVPDeleteResponse'
+        '400':
+          description: Bad request - validation error (missing required fields, invalid data format, or business logic validation failure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeKVPDeleteResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeKVPDeleteResponse'
+        '500':
+          description: Internal server error - unexpected system failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeKVPDeleteResponse'
 
   /knowledge/kvps/query:
     post:
       tags:
         - knowledge-kvp
-      summary: Query KVP knowledge store
-      description: KVP knowledge store querying (not yet implemented)
-      operationId: queryKvpStore
+      summary: Query KVP Store
+      description: Query key-value pairs from the KVP knowledge store using various query types including key-based lookups
+      operationId: query_kvp_store
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeKVPQueryRequest'
+            examples:
+              get_by_key:
+                summary: Get data by key
+                description: Retrieve using composite key
+                value:
+                  request_id: "dbc2fea0-5e6c-4cf9-b7b4-fe6418c041a2"
+                  wksp_id: "9f136aa0-143c-46a6-82f2-249eac489e52"
+                  mas_id: "223e4567-e89b-12d3-a456-426614174001"
+                  agent_id: "agent-001"
+                  query_criteria:
+                    key: {"episode_id": "12345"}
       responses:
-        '501':
-          description: Not implemented
+        '200':
+          description: Query executed successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
-                    example: "KVP knowledge store querying is not yet implemented"
+                $ref: '#/components/schemas/KnowledgeKVPQueryResponse'
+              example:
+                request_id: "dbc2fea0-5e6c-4cf9-b7b4-fe6418c041a2"
+                status: "success"
+                message: "Query executed successfully"
+                records:
+                  - key: {"episode_id": "12345"}
+                    value: {"name": "John Doe", "preferences": {"theme": "dark", "language": "en"}, "last_login": 1640995200}
+                    created_at: 1640995200
+                    updated_at: 1640995300
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeKVPQueryResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeKVPQueryResponse'
         '500':
-          description: Internal server error
+          description: Internal server error - unexpected system failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeKVPQueryResponse'
+
 
 components:
   schemas:
@@ -1193,6 +1414,255 @@ components:
             $ref: '#/components/schemas/KnowledgeVectorQueryResponseRecord'
           description: Query response records (only included for success status)
       description: Response from the Store after querying knowledge vector data
+
+    # KVP Schemas
+    KnowledgeKVPRecord:
+      type: object
+      required:
+        - key
+        - value
+      properties:
+        key:
+          type: object
+          additionalProperties: true
+          description: Key as a JSON object
+          example: {"episode_id": "12345"}
+        value:
+          type: object
+          additionalProperties: true
+          description: Value as a JSON object
+          example: {"name": "John Doe", "preferences": {"theme": "dark", "language": "en"}, "last_login": 1640995200}
+        created_at:
+          type: integer
+          description: Timestamp of record creation in epoch time (optional)
+          example: 1640995200
+        updated_at:
+          type: integer
+          description: Timestamp of record last update in epoch time (optional)
+          example: 1640995300
+      description: Represents a knowledge KVP record in the KVP knowledge store
+
+    KnowledgeKVPStoreOnboardRequest:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: Auto-generated UUID for request tracking used if not passed in request
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+      description: Request to setup the KVP store for storing and managing knowledge key-value pair data
+
+    KnowledgeKVPStoreOnboardResponse:
+      type: object
+      required:
+        - status
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: UUID for request tracking
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        status:
+          $ref: '#/components/schemas/ResponseStatus'
+        message:
+          type: string
+          description: Optional message providing additional information
+          example: "KVP store onboarded successfully"
+      description: Response from the create KVP store request
+
+    KnowledgeKVPStoreOnboardDeleteRequest:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: Auto-generated UUID for request tracking used if not passed in request
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+      description: Request to delete the KVP store used for storing and managing knowledge key-value pair data
+
+    KnowledgeKVPStoreRequest:
+      type: object
+      required:
+        - wksp_id
+        - mas_id
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: Auto-generated UUID for request tracking used if not passed in request
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        wksp_id:
+          type: string
+          minLength: 1
+          description: ID for the Multi-Agent System Workspace
+          example: "123e4567-e89b-12d3-a456-426614174001"
+        mas_id:
+          type: string
+          minLength: 1
+          description: ID for the Multi-Agent System
+          example: "223e4567-e89b-12d3-a456-426614174001"
+        agent_id:
+          type: string
+          minLength: 1
+          description: ID for the specific Agent within the MAS (optional)
+          example: "agent-001"
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeKVPRecord'
+          description: List of KVP records
+          default: []
+      description: Request to the Store for storing and managing knowledge KVP data
+
+    KnowledgeKVPStoreResponse:
+      type: object
+      required:
+        - status
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: UUID for request tracking
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        status:
+          $ref: '#/components/schemas/ResponseStatus'
+        message:
+          type: string
+          description: Optional message providing additional information
+          example: "KVP data stored successfully"
+      description: Response from the Store after storing and managing knowledge KVP data
+
+    KnowledgeKVPDeleteRequest:
+      type: object
+      required:
+        - wksp_id
+        - mas_id
+        - key
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: Auto-generated UUID for request tracking used if not passed in request
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        wksp_id:
+          type: string
+          minLength: 1
+          description: The workspace ID for the request
+          example: "123e4567-e89b-12d3-a456-426614174001"
+        mas_id:
+          type: string
+          minLength: 1
+          description: ID for the Multi-Agent System
+          example: "223e4567-e89b-12d3-a456-426614174001"
+        agent_id:
+          type: string
+          minLength: 1
+          description: ID for the specific Agent within the MAS (optional)
+          example: "agent-001"
+        key:
+          type: object
+          additionalProperties: true
+          description: Key of KVP to delete (as JSON object)
+          example: {"episode_id": "12345"}
+        soft_delete:
+          type: boolean
+          description: Soft delete the KVP
+          default: true
+      description: Request to delete a KVP from the store
+
+    KnowledgeKVPDeleteResponse:
+      type: object
+      required:
+        - status
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: UUID for request tracking
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        status:
+          $ref: '#/components/schemas/ResponseStatus'
+        message:
+          type: string
+          description: Optional message providing additional information
+          example: "KVP deleted successfully"
+      description: Response from the Store after deleting knowledge KVP data
+
+    KnowledgeKVPQueryCriteria:
+      type: object
+      properties:
+        query_type:
+          type: string
+          enum:
+            - get_by_key
+          default: "get_by_key"
+          description: Type of query to execute
+          example: "get_by_key"
+        key:
+          type: object
+          additionalProperties: true
+          description: Key to query for (required for get_by_key)
+          example: {"episode_id": "12345"}
+        limit:
+          type: integer
+          minimum: 1
+          description: Limit used by queries
+          example: 10
+      description: Query criteria for KVP search operations
+
+    KnowledgeKVPQueryRequest:
+      type: object
+      required:
+        - wksp_id
+        - mas_id
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: Auto-generated UUID for request tracking used if not passed in request
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        wksp_id:
+          type: string
+          minLength: 1
+          description: ID for the Workspace
+          example: "9f136aa0-143c-46a6-82f2-249eac489e52"
+        mas_id:
+          type: string
+          minLength: 1
+          description: ID for the Multi-Agent System
+          example: "223e4567-e89b-12d3-a456-426614174001"
+        agent_id:
+          type: string
+          minLength: 1
+          description: ID for the specific Agent within the MAS (optional)
+          example: "agent-001"
+        query_criteria:
+          $ref: '#/components/schemas/KnowledgeKVPQueryCriteria'
+      description: Request to query the KVP store
+
+    KnowledgeKVPQueryResponse:
+      type: object
+      required:
+        - status
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: UUID for request tracking
+          example: "bbc2fea0-5e6c-4cf9-b7b4-fe6418c041a0"
+        status:
+          $ref: '#/components/schemas/ResponseStatus'
+        message:
+          type: string
+          description: Optional message providing additional information
+          example: "Query executed successfully"
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeKVPRecord'
+          description: Query response records (only included for success status)
+          default: []
+      description: Response from the Store after querying knowledge KVP data
 
 externalDocs:
   description: Find more info about the IOC Knowledge Memory Service
