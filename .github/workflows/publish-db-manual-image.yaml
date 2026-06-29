@@ -7,46 +7,100 @@ on:
         description: "Image tag (e.g. 2.0, 2.1, latest)"
         required: true
         default: "2.0"
-      branch:
-        description: "Branch to build from (defaults to the branch selected in the UI)"
-        required: false
-        default: ""
 
 permissions:
   contents: read
   packages: write
 
-jobs:
-  build-and-push-db:
-    name: Build & Push DB Image
-    runs-on: ubuntu-latest
+env:
+  REGISTRY_IMAGE: ${{ github.repository_owner }}/ioc-knowledge-memory-svc-db
 
+jobs:
+  build:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-26.04
+          - platform: linux/arm64
+            runner: ubuntu-26.04-arm
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v6
         with:
-          ref: ${{ inputs.branch || github.ref }}
+          images: ghcr.io/${{ env.REGISTRY_IMAGE }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226 # v3.0.0
+        uses: docker/setup-buildx-action@v4
 
-      - name: Log in to GHCR
-        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-
-      - name: Build and push
-        uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
         with:
           context: docker-db
           file: docker-db/Dockerfile
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
           provenance: false
-          platforms: linux/amd64
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/ioc-knowledge-memory-svc-db:${{ inputs.image-tag }}
+          outputs: type=image,name=ghcr.io/${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ strategy.job-index }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            -t ghcr.io/${{ env.REGISTRY_IMAGE }}:${{ inputs.image-tag }} \
+            $(printf 'ghcr.io/${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ghcr.io/${{ env.REGISTRY_IMAGE }}:${{ inputs.image-tag }}
