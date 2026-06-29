@@ -57,7 +57,7 @@ COPY --from=builder /usr/local/lib/ /usr/local/lib/
 COPY --from=builder /usr/local/share/postgresql/ /usr/local/share/postgresql/
 
 # Preload TimescaleDB shared library at startup
-CMD ["postgres", "-c", "shared_preload_libraries=timescaledb"]
+CMD ["postgres", "-c", "shared_preload_libraries=timescaledb", "-c", "listen_addresses=*"]
 
 # Copy initialization script
 COPY init-extensions.sql /docker-entrypoint-initdb.d/01-init-extensions.sql
