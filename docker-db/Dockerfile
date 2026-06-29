@@ -37,6 +37,7 @@ RUN make USE_PGXS=1 OPTFLAGS=""
 RUN make USE_PGXS=1 install
 
 # Build TimescaleDB with Community license (enables compression + retention)
+# Changed: Removed -DAPACHE_ONLY=1 flag to enable TimescaleDB Community features
 WORKDIR /tmp
 RUN git clone --branch 2.17.2 https://github.com/timescale/timescaledb.git
 WORKDIR /tmp/timescaledb
