@@ -44,7 +44,7 @@ jobs:
           context: docker-db
           file: docker-db/Dockerfile
           provenance: false
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/ioc-knowledge-memory-svc-db:${{ inputs.image-tag }}
